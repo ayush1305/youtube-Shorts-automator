@@ -7,7 +7,7 @@ import random
 from typing import Dict, Any, Optional, List
 from datetime import date
 import json
-from fastapi import FastAPI, HTTPException, status, Request
+from fastapi import FastAPI, HTTPException, status, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
@@ -636,104 +636,91 @@ async def process_video(request: VideoRequest) -> Dict[str, Any]:
             detail=f"FFmpeg rendering failed: {str(e)}"
         )
 
-@app.post("/generate_pipeline", status_code=status.HTTP_200_OK)
-async def run_pipeline(request: PipelineRequest):
-    """Execute the full generation and scoring pipeline in one endpoint."""
+tasks_db = {}
+
+async def run_pipeline_task(task_id: str, category: str, prompt: str):
+    """Executes the full pipeline in a background task to prevent request timeouts."""
+    tasks_db[task_id]["logs"].append("Initiating background rendering...")
+    tasks_db[task_id]["progress"] = 15
     
-    # 1. Enforce 50 video generation daily limit
-    current_count = get_usage()
-    if current_count >= 50:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Daily limit reached. You can only generate 50 videos per day."
-        )
-        
-    logger.info(f"Running generation pipeline for category: '{request.category}'")
-    
-    # 2. Get API keys
-    keys = settings.get_keys()
-    gemini_key = keys.get("gemini_key")
-    pexels_key = keys.get("pexels_key")
-    
-    # 3. Generate script & metadata
-    metadata = youtube_generator.generate_script_and_metadata(request.category, request.prompt)
-    script_text = metadata.get("script", "")
-    keywords = metadata.get("search_keywords", request.category)
-    
-    if not script_text:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to generate script text."
-        )
-        
-    # 4. Search and download background video
-    video_url = youtube_generator.search_pexels_video(keywords, pexels_key)
-    if not video_url:
-        # Fallback stock video from config list
-        fallback_urls = settings.FALLBACK_VIDEOS.get(request.category, settings.FALLBACK_VIDEOS["tech"])
-        video_url = random.choice(fallback_urls)
-        logger.info(f"Using fallback stock video: {video_url}")
-        
-    # Download the video asset
-    temp_video_name = f"bg_{uuid.uuid4().hex[:12]}.mp4"
-    local_video_path = os.path.join(settings.TEMP_DIR, temp_video_name)
+    local_video_path = None
+    resolved_output = None
     
     try:
-        await run_in_threadpool(download_file_sync, video_url, local_video_path)
-    except Exception as e:
-        logger.error(f"Download failed: {str(e)}. Attempting backup stock URL.")
-        # Attempt secondary fallback url from config
-        backup_url = settings.FALLBACK_VIDEOS["tech"][0]
-        await run_in_threadpool(download_file_sync, backup_url, local_video_path)
+        # Get API keys
+        keys = settings.get_keys()
+        gemini_key = keys.get("gemini_key")
+        pexels_key = keys.get("pexels_key")
         
-    # 5. Synthesize TTS speech and generate aligned ASS subtitles
-    voice_name = "en-US-GuyNeural"
-    dest_voice_name = f"voice_{uuid.uuid4().hex[:8]}.mp3"
-    local_voice_path = os.path.join(settings.OUTPUT_DIR, dest_voice_name)
-    
-    ass_filename = f"subtitles_{uuid.uuid4().hex[:8]}.ass"
-    local_ass_path = os.path.join(settings.TEMP_DIR, ass_filename)
-    
-    try:
+        # 1. Script Generation
+        tasks_db[task_id]["logs"].append("Generating script & querying SEO tags via Gemini...")
+        tasks_db[task_id]["progress"] = 30
+        metadata = youtube_generator.generate_script_and_metadata(category, prompt)
+        script_text = metadata.get("script", "")
+        keywords = metadata.get("search_keywords", category)
+        
+        if not script_text:
+            raise Exception("Generated script text is empty.")
+            
+        # 2. Search Pexels video
+        tasks_db[task_id]["logs"].append("Searching Pexels for matching stock footage...")
+        tasks_db[task_id]["progress"] = 45
+        video_url = youtube_generator.search_pexels_video(keywords, pexels_key)
+        if not video_url:
+            fallback_urls = settings.FALLBACK_VIDEOS.get(category, settings.FALLBACK_VIDEOS["tech"])
+            video_url = random.choice(fallback_urls)
+            tasks_db[task_id]["logs"].append("No specific footage found. Using backup stock clip...")
+            
+        # Download video
+        tasks_db[task_id]["logs"].append("Downloading stock video footage...")
+        temp_video_name = f"bg_{uuid.uuid4().hex[:12]}.mp4"
+        local_video_path = os.path.join(settings.TEMP_DIR, temp_video_name)
+        try:
+            await run_in_threadpool(download_file_sync, video_url, local_video_path)
+        except Exception as e:
+            backup_url = settings.FALLBACK_VIDEOS["tech"][0]
+            await run_in_threadpool(download_file_sync, backup_url, local_video_path)
+            
+        # 3. Speech synthesis & Subtitle alignment
+        tasks_db[task_id]["logs"].append("Synthesizing voiceover narration & aligning subtitles...")
+        tasks_db[task_id]["progress"] = 60
+        voice_name = "en-US-GuyNeural"
+        dest_voice_name = f"voice_{uuid.uuid4().hex[:8]}.mp3"
+        local_voice_path = os.path.join(settings.OUTPUT_DIR, dest_voice_name)
+        
+        ass_filename = f"subtitles_{uuid.uuid4().hex[:8]}.ass"
+        local_ass_path = os.path.join(settings.TEMP_DIR, ass_filename)
+        
         await synthesize_tts_with_fallback(script_text, voice_name, local_voice_path, local_ass_path)
-    except Exception as e:
-        logger.exception("Subtitles / Audio compilation failed in pipeline")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Speech synthesis or subtitle alignment failed: {str(e)}"
-        )
         
-    # 6. Render final composite video (loop video, merge audio, overlay subtitle)
-    output_filename = f"shorts_{uuid.uuid4().hex[:8]}.mp4"
-    resolved_output = os.path.join(settings.OUTPUT_DIR, output_filename)
-    
-    duration = await get_audio_duration_ffprobe(local_voice_path)
-    
-    # Relative path formatted with forward slashes for FFmpeg filter on Windows
-    sub_path_ffmpeg = to_posix_relative_path(local_ass_path)
-    video_filter = f"[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,subtitles={sub_path_ffmpeg}[v]"
-    
-    ffmpeg_cmd = [
-        "ffmpeg",
-        "-y",
-        "-stream_loop", "-1",
-        "-i", local_video_path,
-        "-i", local_voice_path,
-        "-filter_complex", video_filter,
-        "-map", "[v]",
-        "-map", "1:a",
-        "-c:v", "libx264",
-        "-preset", "fast",
-        "-crf", "22",
-        "-c:a", "aac",
-        "-b:a", "192k",
-        "-t", f"{duration:.3f}",
-        resolved_output
-    ]
-    
-    logger.info(f"Pipeline FFmpeg execution: {' '.join(ffmpeg_cmd)}")
-    
-    try:
+        # 4. Composite rendering (FFmpeg)
+        tasks_db[task_id]["logs"].append("Compiling vertical video composite (FFmpeg rendering)...")
+        tasks_db[task_id]["progress"] = 80
+        output_filename = f"shorts_{uuid.uuid4().hex[:8]}.mp4"
+        resolved_output = os.path.join(settings.OUTPUT_DIR, output_filename)
+        duration = await get_audio_duration_ffprobe(local_voice_path)
+        
+        sub_path_ffmpeg = to_posix_relative_path(local_ass_path)
+        video_filter = f"[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,subtitles={sub_path_ffmpeg}[v]"
+        
+        ffmpeg_cmd = [
+            "ffmpeg",
+            "-y",
+            "-stream_loop", "-1",
+            "-i", local_video_path,
+            "-i", local_voice_path,
+            "-filter_complex", video_filter,
+            "-map", "[v]",
+            "-map", "1:a",
+            "-c:v", "libx264",
+            "-preset", "fast",
+            "-crf", "22",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            "-t", f"{duration:.3f}",
+            resolved_output
+        ]
+        
         process = await asyncio.create_subprocess_exec(
             *ffmpeg_cmd,
             stdout=asyncio.subprocess.PIPE,
@@ -744,45 +731,84 @@ async def run_pipeline(request: PipelineRequest):
         if process.returncode != 0:
             err = stderr.decode().strip()
             raise Exception(f"FFmpeg rendering crashed: {err}")
-    except Exception as e:
-        logger.exception("FFmpeg compile failed in pipeline execution")
-        # Clean up files
-        if os.path.exists(resolved_output):
-            os.remove(resolved_output)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Video rendering failed: {str(e)}"
-        )
-    finally:
+            
         # Clean up temporary background raw video clip
-        if os.path.exists(local_video_path):
+        if local_video_path and os.path.exists(local_video_path):
             try:
                 os.remove(local_video_path)
             except Exception:
                 pass
                 
-    # 7. Evaluate and score video
-    scores = youtube_generator.score_video_metadata(metadata)
-    
-    # 8. Increment daily usage count
-    new_usage_count = increment_usage()
-    
-    # 9. Formulate final response payload
-    relative_output_video = to_posix_relative_path(resolved_output)
-    
-    return {
-        "success": True,
-        "video_url": f"http://127.0.0.1:8000/{relative_output_video}",
-        "metadata": {
-            "title": metadata.get("title", "Untitled Short"),
-            "description": metadata.get("description", ""),
-            "tags": metadata.get("tags", []),
-            "script": script_text,
-            "search_keywords": keywords
-        },
-        "scores": scores,
-        "usage_today": new_usage_count
+        # 5. Evaluate and score video
+        tasks_db[task_id]["logs"].append("Analyzing performance metrics & scoring outline...")
+        tasks_db[task_id]["progress"] = 95
+        scores = youtube_generator.score_video_metadata(metadata)
+        
+        # 6. Increment daily usage
+        new_usage_count = increment_usage()
+        
+        # Save results
+        relative_output_video = to_posix_relative_path(resolved_output)
+        
+        tasks_db[task_id]["status"] = "completed"
+        tasks_db[task_id]["progress"] = 100
+        tasks_db[task_id]["logs"].append("Pipeline execution completed successfully!")
+        
+        tasks_db[task_id]["result"] = {
+            "success": True,
+            "video_url": f"/{relative_output_video}",
+            "metadata": {
+                "title": metadata.get("title", "Untitled Short"),
+                "description": metadata.get("description", ""),
+                "tags": metadata.get("tags", []),
+                "script": script_text,
+                "search_keywords": keywords
+            },
+            "scores": scores,
+            "usage_today": new_usage_count
+        }
+    except Exception as e:
+        logger.exception(f"Background task failed: {str(e)}")
+        tasks_db[task_id]["status"] = "failed"
+        tasks_db[task_id]["logs"].append(f"Pipeline crashed: {str(e)}")
+        if resolved_output and os.path.exists(resolved_output):
+            try:
+                os.remove(resolved_output)
+            except Exception:
+                pass
+        if local_video_path and os.path.exists(local_video_path):
+            try:
+                os.remove(local_video_path)
+            except Exception:
+                pass
+
+@app.post("/generate_pipeline", status_code=status.HTTP_200_OK)
+async def generate_pipeline(request: PipelineRequest, background_tasks: BackgroundTasks):
+    """Start the video automation pipeline in a background task to prevent Render timeouts."""
+    current_count = get_usage()
+    if current_count >= 50:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Daily limit reached. You can only generate 50 videos per day."
+        )
+        
+    task_id = str(uuid.uuid4())
+    tasks_db[task_id] = {
+        "status": "processing",
+        "progress": 10,
+        "logs": ["Task registered. Starting background rendering pipeline..."]
     }
+    
+    background_tasks.add_task(run_pipeline_task, task_id, request.category, request.prompt)
+    
+    return {"task_id": task_id}
+
+@app.get("/tasks/{task_id}")
+async def get_task_status(task_id: str):
+    """Retrieve status, logs, progress, and results of a background generation task."""
+    if task_id not in tasks_db:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return tasks_db[task_id]
 
 # =====================================================================
 # Main Application Starter
