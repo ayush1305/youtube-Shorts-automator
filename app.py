@@ -43,6 +43,22 @@ app.add_middleware(
 # Serve output directory statically so the frontend can preview generated videos directly
 app.mount("/output", StaticFiles(directory=settings.OUTPUT_DIR), name="output")
 
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi import Depends
+
+security = HTTPBasic()
+
+def get_current_user(credentials: HTTPBasicCredentials = Depends(security)):
+    auth_username = os.environ.get("BASIC_AUTH_USERNAME", "admin")
+    auth_password = os.environ.get("BASIC_AUTH_PASSWORD", "S@lary9321")
+    if credentials.username != auth_username or credentials.password != auth_password:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+
 CLIENT_SECRETS_FILE = os.path.join(BASE_DIR, "client_secrets.json")
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
 oauth_verifiers = {}
@@ -298,7 +314,7 @@ async def synthesize_tts_with_fallback(text: str, voice: str, audio_path: str, a
 # =====================================================================
 
 @app.get("/", response_class=HTMLResponse)
-async def serve_dashboard():
+async def serve_dashboard(username: str = Depends(get_current_user)):
     """Serve the interactive dashboard UI at the root path."""
     dashboard_path = os.path.join(BASE_DIR, "dashboard.html")
     if os.path.exists(dashboard_path):
