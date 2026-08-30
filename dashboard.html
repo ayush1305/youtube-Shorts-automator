@@ -223,7 +223,7 @@
               <span class="text-xs font-semibold text-[var(--muted-foreground)]">YouTube Title (optimized)</span>
               <button onclick="copyToClipboard('seo-title')" class="text-[10px] text-[var(--primary)] hover:underline">Copy</button>
             </div>
-            <div id="seo-title" class="p-2 bg-[var(--background)] border border-[var(--border)] rounded-lg text-xs font-semibold truncate">
+            <div id="seo-title" contenteditable="true" class="p-2 bg-[var(--background)] border border-[var(--border)] rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-[var(--primary)]">
               Generating...
             </div>
           </div>
@@ -245,7 +245,7 @@
               <span class="text-xs font-semibold text-[var(--muted-foreground)]">Description & Captions</span>
               <button onclick="copyToClipboard('seo-desc')" class="text-[10px] text-[var(--primary)] hover:underline">Copy</button>
             </div>
-            <textarea id="seo-desc" readonly rows="3" class="w-full p-2 bg-[var(--background)] border border-[var(--border)] rounded-lg text-xs leading-relaxed font-mono resize-none focus:outline-none">Generating description...</textarea>
+            <textarea id="seo-desc" rows="3" class="w-full p-2 bg-[var(--background)] border border-[var(--border)] rounded-lg text-xs leading-relaxed font-mono resize-y focus:outline-none focus:ring-1 focus:ring-[var(--primary)]">Generating description...</textarea>
           </div>
           
           <!-- Script text box -->
