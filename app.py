@@ -706,6 +706,7 @@ async def run_pipeline_task(task_id: str, category: str, prompt: str):
         ffmpeg_cmd = [
             "ffmpeg",
             "-y",
+            "-threads", "1",
             "-stream_loop", "-1",
             "-i", local_video_path,
             "-i", local_voice_path,
@@ -713,8 +714,8 @@ async def run_pipeline_task(task_id: str, category: str, prompt: str):
             "-map", "[v]",
             "-map", "1:a",
             "-c:v", "libx264",
-            "-preset", "fast",
-            "-crf", "22",
+            "-preset", "ultrafast",
+            "-crf", "24",
             "-c:a", "aac",
             "-b:a", "192k",
             "-t", f"{duration:.3f}",
