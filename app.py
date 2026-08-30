@@ -431,12 +431,8 @@ async def publish_video(request: PublishRequest):
             detail="YouTube channel is not connected. Please authenticate first."
         )
         
-    video_path_clean = request.video_path.lstrip("/")
-    if video_path_clean.startswith("output/"):
-        filename = video_path_clean[len("output/"):]
-        abs_video_path = os.path.abspath(os.path.join(settings.OUTPUT_DIR, filename))
-    else:
-        abs_video_path = os.path.abspath(os.path.join(BASE_DIR, video_path_clean))
+    filename = os.path.basename(request.video_path)
+    abs_video_path = os.path.abspath(os.path.join(settings.OUTPUT_DIR, filename))
         
     if not os.path.exists(abs_video_path):
         raise HTTPException(
