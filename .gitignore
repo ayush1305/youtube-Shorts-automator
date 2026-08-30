@@ -1,0 +1,15 @@
+temp/
+output/
+logs/
+config.json
+token.json
+client_secrets.json
+.system_generated/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.venv
+env/
+venv/

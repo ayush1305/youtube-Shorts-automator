@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>YouTube Automation Dashboard</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    /* Styling scrollbars inside the dashboard container */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--muted-foreground);
+    }
+  </style>
+</head>
+<body class="bg-[var(--background)] text-[var(--foreground)] antialiased min-h-screen p-4 flex flex-col gap-6">
+
+  <!-- ========================================== -->
+  <!-- HEADER & CONNECTION STATUS                 -->
+  <!-- ========================================== -->
+  <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-sm gap-4">
+    <div>
+      <h1 class="text-xl font-bold flex items-center gap-2">
+        <span>🎬</span> YouTube Shorts Automator
+      </h1>
+      <p class="text-xs text-[var(--muted-foreground)]">Create, edit, caption, score, and plan your daily shorts pipeline</p>
+    </div>
+    
+    <div class="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end flex-wrap">
+      <!-- Server Status Tag -->
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-[var(--secondary)] border border-[var(--border)]">
+        <span id="status-dot" class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
+        <span id="status-text">Checking server...</span>
+      </div>
+      
+      <!-- YouTube Channel Status Tag -->
+      <button id="btn-yt-connect" onclick="connectYouTube()" class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-[var(--secondary)] border border-[var(--border)] hover:bg-[var(--border)] transition-all">
+        <span id="yt-dot" class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+        <span id="yt-text">Connect YouTube</span>
+      </button>
+      
+      <!-- Daily usage display -->
+      <div class="text-right">
+        <div class="text-xs text-[var(--muted-foreground)]">Videos Generated Today</div>
+        <div class="text-lg font-bold"><span id="usage-count">0</span> / 50</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ========================================== -->
+  <!-- MAIN LAYOUT GRID                           -->
+  <!-- ========================================== -->
+  <main class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+    
+    <!-- LEFT SIDE: INPUT & CONFIGURATION (5 COLS) -->
+    <section class="lg:col-span-5 flex flex-col gap-6">
+      
+      <!-- 1. Generator Controls -->
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 shadow-sm flex flex-col gap-4">
+        <h2 class="font-bold text-base flex items-center gap-2">
+          🪄 Generate Video
+        </h2>
+        
+        <div class="flex flex-col gap-1.5">
+          <label class="text-xs font-semibold text-[var(--muted-foreground)]">Category</label>
+          <select id="category-select" class="w-full px-3 py-2 rounded-lg bg-[var(--background)] border border-[var(--border)] text-sm focus:outline-none focus:ring-1 focus:ring-[var(--primary)] text-[var(--foreground)]">
+            <option value="tech">Tech & Innovation</option>
+            <option value="history">Historical Secrets & Wars</option>
+            <option value="how_why">"How & Why" Explanations</option>
+          </select>
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          <label class="text-xs font-semibold text-[var(--muted-foreground)]">Custom Topic / Keywords (Optional)</label>
+          <input type="text" id="topic-prompt" placeholder="e.g. quantum physics, smartphone history" class="w-full px-3 py-2 rounded-lg bg-[var(--background)] border border-[var(--border)] text-sm focus:outline-none focus:ring-1 focus:ring-[var(--primary)] text-[var(--foreground)]">
+        </div>
+        
+        <button id="btn-generate" onclick="triggerPipeline()" class="w-full py-2.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary)]/90 font-semibold text-sm flex justify-center items-center gap-2 transition-all">
+          <span>⚡</span> Generate Short
+        </button>
+
+        <!-- Generation Status Logs -->
+        <div id="gen-logs-box" class="hidden border border-[var(--border)] bg-[var(--background)] rounded-lg p-3 text-xs font-mono max-h-[150px] overflow-y-auto flex flex-col gap-1">
+          <div id="gen-progress-bar" class="w-full h-1 bg-[var(--secondary)] rounded-full overflow-hidden mb-2">
+            <div id="gen-progress-fill" class="h-full bg-[var(--primary)] transition-all duration-500 w-[5%]"></div>
+          </div>
+          <div id="gen-logs-content"></div>
+        </div>
+      </div>
+      
+      <!-- 2. Posting Recommendations for Today -->
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 shadow-sm flex flex-col gap-4">
+        <div class="flex justify-between items-center">
+          <h2 class="font-bold text-base flex items-center gap-2">
+            📅 Trending Topics Today
+          </h2>
+          <button onclick="loadRecommendations()" class="text-xs text-[var(--primary)] hover:underline flex items-center gap-1">
+            🔄 Refresh
+          </button>
+        </div>
+        <div id="recommendations-box" class="flex flex-col gap-3">
+          <p class="text-xs text-[var(--muted-foreground)] italic">Loading trending ideas...</p>
+        </div>
+      </div>
+
+      <!-- 3. Key Configurations Settings -->
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 shadow-sm flex flex-col gap-4">
+        <h2 class="font-bold text-base flex items-center gap-2">
+          ⚙️ Setup API Credentials
+        </h2>
+        <p class="text-xs text-[var(--muted-foreground)]">To enable custom AI scripts and automated stock video search, configure your keys here. Keys are saved locally in the project folder.</p>
+        
+        <div class="flex flex-col gap-3">
+          <div class="flex flex-col gap-1">
+            <div class="flex justify-between items-center">
+              <label class="text-xs font-semibold text-[var(--muted-foreground)]">Gemini API Key</label>
+              <span id="gemini-status" class="text-[10px] text-red-500 font-semibold">Not Configured</span>
+            </div>
+            <input type="password" id="key-gemini" placeholder="Enter Gemini API Key" class="w-full px-3 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-xs focus:outline-none focus:ring-1 focus:ring-[var(--primary)] text-[var(--foreground)]">
+          </div>
+          
+          <div class="flex flex-col gap-1">
+            <div class="flex justify-between items-center">
+              <label class="text-xs font-semibold text-[var(--muted-foreground)]">Pexels API Key</label>
+              <span id="pexels-status" class="text-[10px] text-red-500 font-semibold">Not Configured</span>
+            </div>
+            <input type="password" id="key-pexels" placeholder="Enter Pexels API Key" class="w-full px-3 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-xs focus:outline-none focus:ring-1 focus:ring-[var(--primary)] text-[var(--foreground)]">
+          </div>
+          
+          <button id="btn-save-keys" onclick="saveKeys()" class="py-2 mt-2 rounded-lg bg-[var(--secondary)] text-[var(--secondary-foreground)] hover:bg-[var(--border)] border border-[var(--border)] text-xs font-semibold transition-all">
+            💾 Save API Credentials
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT SIDE: VIDEO PREVIEW & ANALYTICS OUTLINE (7 COLS) -->
+    <section class="lg:col-span-7 flex flex-col gap-6">
+      
+      <!-- Video output box -->
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-6 bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 shadow-sm">
+        
+        <!-- Video Player (aspect 9:16) (5 columns) -->
+        <div class="md:col-span-5 flex flex-col items-center justify-center border border-[var(--border)] rounded-xl p-3 bg-black aspect-[9/16] relative overflow-hidden group">
+          <div id="video-placeholder" class="text-center flex flex-col items-center justify-center p-4">
+            <span class="text-4xl animate-bounce mb-3">🎬</span>
+            <p class="text-xs text-white/70 font-semibold">Your video preview will appear here</p>
+            <p class="text-[10px] text-white/50 mt-1 italic">Subtitles are burned directly into the output</p>
+          </div>
+          <video id="video-player" controls loop autoplay class="hidden w-full h-full object-cover rounded-lg"></video>
+        </div>
+        
+        <!-- Video Scores & Assessment (7 columns) -->
+        <div class="md:col-span-7 flex flex-col gap-4">
+          <div class="flex justify-between items-center border-b border-[var(--border)] pb-2">
+            <h3 class="font-bold text-base">📊 Performance Assessment</h3>
+            <div class="px-2 py-0.5 rounded text-[10px] font-bold bg-[var(--secondary)] border border-[var(--border)] text-[var(--muted-foreground)]">YouTube Standards</div>
+          </div>
+          
+          <!-- Large Dial/Score -->
+          <div class="flex items-center gap-4 bg-[var(--background)] p-3 rounded-lg border border-[var(--border)]">
+            <div class="relative w-16 h-16 flex items-center justify-center bg-[var(--card)] rounded-full border-2 border-[var(--border)] shadow-sm">
+              <span id="score-overall" class="text-xl font-bold">--</span>
+            </div>
+            <div>
+              <h4 class="text-sm font-bold">Overall Potential</h4>
+              <p class="text-[10px] text-[var(--muted-foreground)] mt-0.5">Estimated probability of hitting the YouTube Shorts algorithm shelf.</p>
+            </div>
+          </div>
+          
+          <!-- Detailed metrics grid -->
+          <div class="grid grid-cols-2 gap-3">
+            <div class="p-2.5 bg-[var(--background)] border border-[var(--border)] rounded-lg">
+              <div class="text-[10px] text-[var(--muted-foreground)] font-semibold">Hook Strength</div>
+              <div id="score-hook" class="text-base font-bold mt-1">--</div>
+            </div>
+            
+            <div class="p-2.5 bg-[var(--background)] border border-[var(--border)] rounded-lg">
+              <div class="text-[10px] text-[var(--muted-foreground)] font-semibold">Retention Rate</div>
+              <div id="score-retention" class="text-base font-bold mt-1">--</div>
+            </div>
+            
+            <div class="p-2.5 bg-[var(--background)] border border-[var(--border)] rounded-lg">
+              <div class="text-[10px] text-[var(--muted-foreground)] font-semibold">SEO Optimisation</div>
+              <div id="score-seo" class="text-base font-bold mt-1">--</div>
+            </div>
+            
+            <div class="p-2.5 bg-[var(--background)] border border-[var(--border)] rounded-lg">
+              <div class="text-[10px] text-[var(--muted-foreground)] font-semibold">Est. Click-Through</div>
+              <div id="score-ctr" class="text-base font-bold mt-1">--</div>
+            </div>
+          </div>
+          
+          <!-- AI Feedback and improvements -->
+          <div class="flex flex-col gap-1.5 mt-2">
+            <span class="text-xs font-semibold text-[var(--muted-foreground)]">Critical Feedback</span>
+            <div id="score-feedback" class="p-3 bg-[var(--background)] border border-[var(--border)] rounded-lg text-xs leading-relaxed text-[var(--muted-foreground)] italic">
+              Generate a video to see critical evaluation and recommendations.
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- SEO Metadata Panel -->
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 shadow-sm flex flex-col gap-4">
+        <h3 class="font-bold text-base flex items-center gap-2">
+          📝 Generated SEO Metadata
+        </h3>
+        
+        <div class="flex flex-col gap-4">
+          <!-- Title Box -->
+          <div class="flex flex-col gap-1">
+            <div class="flex justify-between items-center">
+              <span class="text-xs font-semibold text-[var(--muted-foreground)]">YouTube Title (optimized)</span>
+              <button onclick="copyToClipboard('seo-title')" class="text-[10px] text-[var(--primary)] hover:underline">Copy</button>
+            </div>
+            <div id="seo-title" class="p-2 bg-[var(--background)] border border-[var(--border)] rounded-lg text-xs font-semibold truncate">
+              Generating...
+            </div>
+          </div>
+          
+          <!-- Tags Box -->
+          <div class="flex flex-col gap-1">
+            <div class="flex justify-between items-center">
+              <span class="text-xs font-semibold text-[var(--muted-foreground)]">Optimized Tags</span>
+              <button onclick="copyTags()" class="text-[10px] text-[var(--primary)] hover:underline">Copy All</button>
+            </div>
+            <div id="seo-tags" class="flex flex-wrap gap-1.5 p-2 bg-[var(--background)] border border-[var(--border)] rounded-lg min-h-[40px] text-xs">
+              <span class="text-[10px] text-[var(--muted-foreground)] italic">Tags will populate here.</span>
+            </div>
+          </div>
+          
+          <!-- Description Box -->
+          <div class="flex flex-col gap-1">
+            <div class="flex justify-between items-center">
+              <span class="text-xs font-semibold text-[var(--muted-foreground)]">Description & Captions</span>
+              <button onclick="copyToClipboard('seo-desc')" class="text-[10px] text-[var(--primary)] hover:underline">Copy</button>
+            </div>
+            <textarea id="seo-desc" readonly rows="3" class="w-full p-2 bg-[var(--background)] border border-[var(--border)] rounded-lg text-xs leading-relaxed font-mono resize-none focus:outline-none">Generating description...</textarea>
+          </div>
+          
+          <!-- Script text box -->
+          <div class="flex flex-col gap-1">
+            <div class="flex justify-between items-center">
+              <span class="text-xs font-semibold text-[var(--muted-foreground)]">Full Video Narration Script</span>
+              <button onclick="copyToClipboard('seo-script')" class="text-[10px] text-[var(--primary)] hover:underline">Copy</button>
+            </div>
+            <textarea id="seo-script" readonly rows="4" class="w-full p-2 bg-[var(--background)] border border-[var(--border)] rounded-lg text-xs leading-relaxed font-mono resize-none focus:outline-none">Generating voiceover script...</textarea>
+      </div>
+
+      <!-- YouTube Publishing Control Panel -->
+      <div id="yt-publish-card" class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 shadow-sm flex flex-col gap-4">
+        <h3 class="font-bold text-base flex items-center gap-2">
+          🚀 Publish to YouTube Channel
+        </h3>
+        <p class="text-xs text-[var(--muted-foreground)] text-balance">Upload your generated short directly to your channel. It will automatically compile and post it using the YouTube Shorts aspect ratio.</p>
+        
+        <div id="yt-publish-form" class="hidden flex flex-col gap-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs font-semibold text-[var(--muted-foreground)]">Privacy Status</label>
+              <select id="yt-privacy" class="w-full px-3 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-xs focus:outline-none focus:ring-1 focus:ring-[var(--primary)] text-[var(--foreground)]">
+                <option value="private">Private (Recommended Draft)</option>
+                <option value="public">Public (Immediate Publish)</option>
+                <option value="unlisted">Unlisted</option>
+              </select>
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <label class="text-xs font-semibold text-[var(--muted-foreground)]">Format</label>
+              <input type="text" readonly value="YouTube Shorts (9:16)" class="w-full px-3 py-1.5 rounded-lg bg-[var(--secondary)] border border-[var(--border)] text-xs text-[var(--muted-foreground)] cursor-not-allowed">
+            </div>
+          </div>
+          
+          <button id="btn-publish-yt" onclick="publishVideoToYouTube()" class="w-full py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold text-sm flex justify-center items-center gap-2 transition-all">
+            <span>📺</span> Upload Video
+          </button>
+          
+          <div id="yt-upload-status" class="hidden border border-[var(--border)] bg-[var(--background)] rounded-lg p-3 text-xs font-mono text-[var(--muted-foreground)] italic">
+            Connecting...
+          </div>
+        </div>
+        
+        <div id="yt-publish-placeholder" class="text-center py-4 border border-dashed border-[var(--border)] rounded-lg text-xs text-[var(--muted-foreground)]">
+          Generate a video and link your channel first to enable direct publishing.
+        </div>
+      </div>
+      
+    </section>
+  </main>
+
+  <!-- ========================================== -->
+  <!-- JAVASCRIPT APP LOGIC                       -->
+  <!-- ========================================== -->
+  <script>
+    const API_BASE = window.location.origin; // Set dynamically to backend host!
+
+    // Setup events and load components on window load
+    window.addEventListener("load", () => {
+      checkServerStatus();
+      loadCredentials();
+      loadRecommendations();
+      checkYouTubeStatus();
+      
+      // Periodically refresh connection status
+      setInterval(checkServerStatus, 10000);
+      setInterval(checkYouTubeStatus, 5000);
+      
+      // Listen to category change to auto-update recommendations
+      document.getElementById("category-select").addEventListener("change", loadRecommendations);
+    });
+
+    // Check backend connection health
+    async function checkServerStatus() {
+      const dot = document.getElementById("status-dot");
+      const text = document.getElementById("status-text");
+      const usage = document.getElementById("usage-count");
+      
+      try {
+        const response = await fetch(`${API_BASE}/`);
+        if (response.ok) {
+          dot.className = "w-2.5 h-2.5 rounded-full bg-green-500";
+          text.innerText = "Server Online";
+          
+          // Get specific usage count
+          const usageResponse = await fetch(`${API_BASE}/usage`);
+          const usageData = await usageResponse.json();
+          usage.innerText = usageData.count;
+        } else {
+          throw new Error();
+        }
+      } catch (err) {
+        dot.className = "w-2.5 h-2.5 rounded-full bg-red-500";
+        text.innerText = "Server Offline";
+      }
+    }
+
+    let youtubeConnected = false;
+    let currentVideoPath = ""; // Stores the path of the currently generated video
+
+    // Check YouTube connection status
+    async function checkYouTubeStatus() {
+      const dot = document.getElementById("yt-dot");
+      const text = document.getElementById("yt-text");
+      const btn = document.getElementById("btn-yt-connect");
+      
+      try {
+        const response = await fetch(`${API_BASE}/youtube/status`);
+        if (response.ok) {
+          const data = await response.json();
+          youtubeConnected = data.connected;
+          
+          if (youtubeConnected) {
+            dot.className = "w-2.5 h-2.5 rounded-full bg-emerald-500";
+            text.innerText = "YouTube Linked";
+            btn.title = "Your YouTube channel is authenticated.";
+          } else {
+            dot.className = "w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse";
+            text.innerText = "Connect YouTube";
+            btn.title = "Click to link your YouTube channel.";
+          }
+        }
+      } catch (err) {
+        dot.className = "w-2.5 h-2.5 rounded-full bg-red-500";
+        text.innerText = "Auth Offline";
+      }
+      
+      updatePublishCardState();
+    }
+
+    // Connect YouTube Channel
+    function connectYouTube() {
+      window.open(`${API_BASE}/auth/youtube`, "YouTube Auth", "width=600,height=600");
+    }
+
+    // Update visibility of the publish card depending on whether channel is linked and video is ready
+    function updatePublishCardState() {
+      const placeholder = document.getElementById("yt-publish-placeholder");
+      const form = document.getElementById("yt-publish-form");
+      
+      const player = document.getElementById("video-player");
+      if (player && player.src && !player.classList.contains("hidden")) {
+        currentVideoPath = player.src;
+      }
+      
+      if (youtubeConnected && currentVideoPath) {
+        placeholder.classList.add("hidden");
+        form.classList.remove("hidden");
+      } else {
+        placeholder.classList.remove("hidden");
+        form.classList.add("hidden");
+        
+        if (!youtubeConnected) {
+          placeholder.innerText = "Link your YouTube channel in the header to enable direct publishing.";
+        } else if (!currentVideoPath) {
+          placeholder.innerText = "Generate a video first to enable direct publishing.";
+        }
+      }
+    }
+
+    // Upload generated video directly to YouTube
+    async function publishVideoToYouTube() {
+      const statusBox = document.getElementById("yt-upload-status");
+      const publishBtn = document.getElementById("btn-publish-yt");
+      const privacy = document.getElementById("yt-privacy").value;
+      const title = document.getElementById("seo-title").innerText;
+      const desc = document.getElementById("seo-desc").value;
+      
+      // Collect tags from tag container
+      const tagSpans = document.querySelectorAll("#seo-tags span:not(.italic)");
+      const tags = Array.from(tagSpans).map(span => span.innerText.replace("#", ""));
+      
+      if (!currentVideoPath) {
+        alert("No video file found to publish. Please generate a video first.");
+        return;
+      }
+      
+      statusBox.classList.remove("hidden");
+      statusBox.innerText = "Initiating resumable upload connection...";
+      publishBtn.disabled = true;
+      publishBtn.classList.add("opacity-50", "cursor-not-allowed");
+      
+      try {
+        const response = await fetch(`${API_BASE}/publish`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            video_path: currentVideoPath,
+            title: title,
+            description: desc,
+            tags: tags,
+            privacy_status: privacy
+          })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          statusBox.innerHTML = `<span class="text-emerald-500 font-bold">SUCCESS!</span> Video uploaded. <br>Video ID: <strong>${data.video_id}</strong> <br><a href="https://youtu.be/${data.video_id}" target="_blank" class="text-blue-500 underline font-semibold hover:text-blue-600">Open on YouTube</a>`;
+        } else {
+          const errData = await response.json();
+          throw new Error(errData.detail || "Upload request failed.");
+        }
+      } catch (err) {
+        statusBox.innerHTML = `<span class="text-red-500 font-bold">UPLOAD FAILED:</span> ${err.message}`;
+      } finally {
+        publishBtn.disabled = false;
+        publishBtn.classList.remove("opacity-50", "cursor-not-allowed");
+      }
+    }
+
+    // Load API keys status
+    async function loadCredentials() {
+      const gStatus = document.getElementById("gemini-status");
+      const pStatus = document.getElementById("pexels-status");
+      
+      try {
+        const response = await fetch(`${API_BASE}/settings/keys`);
+        if (response.ok) {
+          const data = await response.json();
+          
+          if (data.gemini_configured) {
+            gStatus.innerText = `Configured (${data.gemini_mask})`;
+            gStatus.className = "text-[10px] text-green-500 font-semibold";
+          } else {
+            gStatus.innerText = "Not Configured";
+            gStatus.className = "text-[10px] text-red-500 font-semibold";
+          }
+          
+          if (data.pexels_configured) {
+            pStatus.innerText = `Configured (${data.pexels_mask})`;
+            pStatus.className = "text-[10px] text-green-500 font-semibold";
+          } else {
+            pStatus.innerText = "Not Configured";
+            pStatus.className = "text-[10px] text-red-500 font-semibold";
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load credentials state:", err);
+      }
+    }
+
+    // Save API credentials
+    async function saveKeys() {
+      const gKey = document.getElementById("key-gemini").value.trim();
+      const pKey = document.getElementById("key-pexels").value.trim();
+      const btn = document.getElementById("btn-save-keys");
+      
+      if (!gKey && !pKey) {
+        alert("Please enter at least one key to save.");
+        return;
+      }
+      
+      btn.innerText = "Saving credentials...";
+      btn.disabled = true;
+      
+      try {
+        const response = await fetch(`${API_BASE}/settings/keys`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            gemini_key: gKey,
+            pexels_key: pKey
+          })
+        });
+        
+        if (response.ok) {
+          alert("API keys saved successfully!");
+          document.getElementById("key-gemini").value = "";
+          document.getElementById("key-pexels").value = "";
+          loadCredentials();
+          checkServerStatus();
+        } else {
+          const errData = await response.json();
+          alert(`Error saving credentials: ${errData.detail}`);
+        }
+      } catch (err) {
+        alert("Connection failed. Ensure the backend FastAPI server is running.");
+      } finally {
+        btn.innerText = "💾 Save API Credentials";
+        btn.disabled = false;
+      }
+    }
+
+    // Load trend posting recommendations
+    async function loadRecommendations() {
+      const cat = document.getElementById("category-select").value;
+      const box = document.getElementById("recommendations-box");
+      
+      box.innerHTML = `<p class="text-xs text-[var(--muted-foreground)] italic">Loading trending ideas...</p>`;
+      
+      try {
+        const response = await fetch(`${API_BASE}/trending?category=${cat}`);
+        if (response.ok) {
+          const data = await response.json();
+          const recs = data.recommendations || [];
+          
+          if (recs.length === 0) {
+            box.innerHTML = `<p class="text-xs text-[var(--muted-foreground)] italic">No recommendations available.</p>`;
+            return;
+          }
+          
+          box.innerHTML = "";
+          recs.forEach((rec, idx) => {
+            const card = document.createElement("div");
+            card.className = "p-3 bg-[var(--background)] border border-[var(--border)] rounded-lg text-xs flex flex-col gap-1 hover:border-[var(--primary)] transition-all cursor-pointer";
+            card.onclick = () => {
+              // Click to auto-fill generator keywords input
+              document.getElementById("topic-prompt").value = rec.title.replace(/[^\w\s\s]/gi, '').trim();
+            };
+            card.innerHTML = `
+              <div class="font-bold flex items-center justify-between text-[var(--foreground)]">
+                <span>⚡ ${rec.title}</span>
+                <span class="text-[9px] text-[var(--primary)] uppercase tracking-wider">Angle ${idx+1}</span>
+              </div>
+              <p class="text-[var(--muted-foreground)] text-[10px] leading-relaxed mt-0.5">${rec.description}</p>
+              <div class="text-[9px] text-[var(--primary)] font-semibold mt-1 bg-[var(--secondary)] px-2 py-1 rounded border border-[var(--border)] leading-normal whitespace-normal">
+                Hook: ${rec.angle}
+              </div>
+            `;
+            box.appendChild(card);
+          });
+        } else {
+          box.innerHTML = `<p class="text-xs text-red-500">Failed to load recommendations.</p>`;
+        }
+      } catch (err) {
+        box.innerHTML = `<p class="text-xs text-red-500">Offline: Could not connect to API.</p>`;
+      }
+    }
+
+    // Run unified video generation pipeline
+    async function triggerPipeline() {
+      const cat = document.getElementById("category-select").value;
+      const prompt = document.getElementById("topic-prompt").value.trim();
+      
+      const btn = document.getElementById("btn-generate");
+      const logsBox = document.getElementById("gen-logs-box");
+      const logsContent = document.getElementById("gen-logs-content");
+      const progressFill = document.getElementById("gen-progress-fill");
+      
+      // Update buttons
+      btn.innerText = "Generating Video...";
+      btn.disabled = true;
+      
+      // Show logs box
+      logsBox.classList.remove("hidden");
+      logsContent.innerHTML = "";
+      
+      function addLog(text, level = "info") {
+        const time = new Date().toLocaleTimeString();
+        const logItem = document.createElement("div");
+        logItem.className = level === "error" ? "text-red-500 font-bold" : "text-[var(--muted-foreground)]";
+        logItem.innerText = `[${time}] ${text}`;
+        logsContent.appendChild(logItem);
+        logsBox.scrollTop = logsBox.scrollHeight;
+      }
+      
+      addLog("Starting video automation pipeline...");
+      progressFill.style.width = "10%";
+      
+      try {
+        // Step 1: Request script & outline
+        addLog("Generating viral script & querying YouTube SEO targets...");
+        progressFill.style.width = "30%";
+        
+        const response = await fetch(`${API_BASE}/generate_pipeline`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            category: cat,
+            prompt: prompt
+          })
+        });
+        
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.detail || "Server pipeline error.");
+        }
+        
+        progressFill.style.width = "75%";
+        addLog("Audio narration generated. Styled center subtitles synced.");
+        addLog("FFmpeg composite rendering completed. Scaling to 1080x1920 portrait...");
+        
+        const data = await response.json();
+        progressFill.style.width = "100%";
+        addLog("Video generation and scoring completed successfully!", "success");
+        
+        // Populate results
+        populatePipelineOutput(data);
+        checkServerStatus(); // refresh usage
+      } catch (err) {
+        addLog(`Pipeline failed: ${err.message}`, "error");
+        progressFill.style.width = "0%";
+        alert(`Generation failed: ${err.message}`);
+      } finally {
+        btn.innerText = "⚡ Generate Short";
+        btn.disabled = false;
+      }
+    }
+
+    // Populate visual elements with backend payload
+    function populatePipelineOutput(data) {
+      // 1. Setup Video preview
+      const player = document.getElementById("video-player");
+      const placeholder = document.getElementById("video-placeholder");
+      
+      if (data.video_url) {
+        player.src = data.video_url;
+        player.classList.remove("hidden");
+        placeholder.classList.add("hidden");
+        player.load();
+        player.play();
+        
+        currentVideoPath = data.video_url;
+        updatePublishCardState();
+      }
+      
+      // 2. Populate scores
+      const sc = data.scores || {};
+      document.getElementById("score-overall").innerText = sc.overall_score || "--";
+      document.getElementById("score-hook").innerText = `${sc.hook_score || "--"} / 100`;
+      document.getElementById("score-retention").innerText = `${sc.retention_score || "--"} / 100`;
+      document.getElementById("score-seo").innerText = `${sc.seo_score || "--"} / 100`;
+      document.getElementById("score-ctr").innerText = sc.estimated_ctr || "--";
+      
+      const feedback = document.getElementById("score-feedback");
+      feedback.innerHTML = `
+        <p class="font-semibold text-[var(--foreground)] mb-1">Feedback:</p>
+        <p class="mb-3">${sc.feedback || "No feedback provided."}</p>
+        <p class="font-semibold text-[var(--foreground)] mb-1">Recommendations:</p>
+        <ul class="list-disc pl-4 flex flex-col gap-1">
+          ${(sc.suggestions || []).map(s => `<li>${s}</li>`).join("")}
+        </ul>
+      `;
+      
+      // 3. Populate SEO tags
+      const meta = data.metadata || {};
+      document.getElementById("seo-title").innerText = meta.title || "Untitled";
+      document.getElementById("seo-desc").value = meta.description || "";
+      document.getElementById("seo-script").value = meta.script || "";
+      
+      const tagsBox = document.getElementById("seo-tags");
+      tagsBox.innerHTML = "";
+      const tags = meta.tags || [];
+      if (tags.length === 0) {
+        tagsBox.innerHTML = `<span class="text-[10px] text-[var(--muted-foreground)] italic">No tags generated.</span>`;
+      } else {
+        tags.forEach(t => {
+          const pill = document.createElement("span");
+          pill.className = "px-2 py-0.5 bg-[var(--secondary)] border border-[var(--border)] rounded text-[10px] font-semibold text-[var(--muted-foreground)]";
+          pill.innerText = t;
+          tagsBox.appendChild(pill);
+        });
+      }
+    }
+
+    // Clipboard copy utilities
+    function copyToClipboard(elementId) {
+      const element = document.getElementById(elementId);
+      let text = "";
+      if (element.tagName === "TEXTAREA" || element.tagName === "INPUT") {
+        text = element.value;
+      } else {
+        text = element.innerText;
+      }
+      
+      navigator.clipboard.writeText(text).then(() => {
+        alert("Copied to clipboard!");
+      }).catch(err => {
+        console.error("Clipboard copy failed:", err);
+      });
+    }
+
+    // Copy tags list helper
+    function copyTags() {
+      const tags = [];
+      const pills = document.getElementById("seo-tags").querySelectorAll("span");
+      pills.forEach(p => {
+        if (p.innerText) tags.push(p.innerText);
+      });
+      if (tags.length === 0) return;
+      navigator.clipboard.writeText(tags.join(", ")).then(() => {
+        alert("Copied tags list to clipboard!");
+      });
+    }
+  </script>
+</body>
+</html>
