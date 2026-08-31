@@ -234,9 +234,7 @@
               <span class="text-xs font-semibold text-[var(--muted-foreground)]">Optimized Tags</span>
               <button onclick="copyTags()" class="text-[10px] text-[var(--primary)] hover:underline">Copy All</button>
             </div>
-            <div id="seo-tags" class="flex flex-wrap gap-1.5 p-2 bg-[var(--background)] border border-[var(--border)] rounded-lg min-h-[40px] text-xs">
-              <span class="text-[10px] text-[var(--muted-foreground)] italic">Tags will populate here.</span>
-            </div>
+            <textarea id="seo-tags" rows="2" class="w-full p-2 bg-[var(--background)] border border-[var(--border)] rounded-lg text-xs leading-relaxed font-mono resize-y focus:outline-none focus:ring-1 focus:ring-[var(--primary)]">Tags will populate here.</textarea>
           </div>
           
           <!-- Description Box -->
@@ -414,9 +412,9 @@
       const title = document.getElementById("seo-title").innerText;
       const desc = document.getElementById("seo-desc").value;
       
-      // Collect tags from tag container
-      const tagSpans = document.querySelectorAll("#seo-tags span:not(.italic)");
-      const tags = Array.from(tagSpans).map(span => span.innerText.replace("#", ""));
+      // Collect tags from editable tags box
+      const tagsVal = document.getElementById("seo-tags").value;
+      const tags = tagsVal.split(",").map(t => t.trim().replace("#", "")).filter(Boolean);
       
       if (!currentVideoPath) {
         alert("No video file found to publish. Please generate a video first.");
@@ -554,11 +552,7 @@
           box.innerHTML = "";
           recs.forEach((rec, idx) => {
             const card = document.createElement("div");
-            card.className = "p-3 bg-[var(--background)] border border-[var(--border)] rounded-lg text-xs flex flex-col gap-1 hover:border-[var(--primary)] transition-all cursor-pointer";
-            card.onclick = () => {
-              // Click to auto-fill generator keywords input
-              document.getElementById("topic-prompt").value = rec.title.replace(/[^\w\s\s]/gi, '').trim();
-            };
+            card.className = "p-3 bg-[var(--background)] border border-[var(--border)] rounded-lg text-xs flex flex-col gap-1 hover:border-[var(--primary)] transition-all";
             card.innerHTML = `
               <div class="font-bold flex items-center justify-between text-[var(--foreground)]">
                 <span>⚡ ${rec.title}</span>
@@ -568,6 +562,9 @@
               <div class="text-[9px] text-[var(--primary)] font-semibold mt-1 bg-[var(--secondary)] px-2 py-1 rounded border border-[var(--border)] leading-normal whitespace-normal">
                 Hook: ${rec.angle}
               </div>
+              <button onclick="useRecommendation('${rec.title.replace(/'/g, "\\'")}')" class="mt-2 w-full py-1 bg-[var(--primary)] text-white text-[10px] rounded hover:bg-opacity-90 transition-all font-semibold flex items-center justify-center gap-1 shadow-sm">
+                ⚡ Use This Topic
+              </button>
             `;
             box.appendChild(card);
           });
@@ -577,6 +574,22 @@
       } catch (err) {
         box.innerHTML = `<p class="text-xs text-red-500">Offline: Could not connect to API.</p>`;
       }
+    }
+
+    // Auto-fill and target generator panel
+    function useRecommendation(title) {
+      const input = document.getElementById("topic-prompt");
+      input.value = title.replace(/[^\w\s\s]/gi, '').trim();
+      
+      // Scroll to the generator form
+      document.getElementById("btn-generate").scrollIntoView({ behavior: 'smooth' });
+      
+      // Visual flash effect on input box
+      input.focus();
+      input.classList.add("ring-2", "ring-[var(--primary)]");
+      setTimeout(() => {
+        input.classList.remove("ring-2", "ring-[var(--primary)]");
+      }, 1500);
     }
 
     // Run unified video generation pipeline
@@ -722,18 +735,8 @@
       document.getElementById("seo-script").value = meta.script || "";
       
       const tagsBox = document.getElementById("seo-tags");
-      tagsBox.innerHTML = "";
       const tags = meta.tags || [];
-      if (tags.length === 0) {
-        tagsBox.innerHTML = `<span class="text-[10px] text-[var(--muted-foreground)] italic">No tags generated.</span>`;
-      } else {
-        tags.forEach(t => {
-          const pill = document.createElement("span");
-          pill.className = "px-2 py-0.5 bg-[var(--secondary)] border border-[var(--border)] rounded text-[10px] font-semibold text-[var(--muted-foreground)]";
-          pill.innerText = t;
-          tagsBox.appendChild(pill);
-        });
-      }
+      tagsBox.value = tags.join(", ");
     }
 
     // Clipboard copy utilities
@@ -755,13 +758,9 @@
 
     // Copy tags list helper
     function copyTags() {
-      const tags = [];
-      const pills = document.getElementById("seo-tags").querySelectorAll("span");
-      pills.forEach(p => {
-        if (p.innerText) tags.push(p.innerText);
-      });
-      if (tags.length === 0) return;
-      navigator.clipboard.writeText(tags.join(", ")).then(() => {
+      const tagsText = document.getElementById("seo-tags").value;
+      if (!tagsText) return;
+      navigator.clipboard.writeText(tagsText).then(() => {
         alert("Copied tags list to clipboard!");
       });
     }

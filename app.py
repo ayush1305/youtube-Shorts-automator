@@ -655,7 +655,7 @@ async def run_pipeline_task(task_id: str, category: str, prompt: str):
     tasks_db[task_id]["logs"].append("Initiating background rendering...")
     tasks_db[task_id]["progress"] = 15
     
-    local_video_path = None
+    local_video_paths = []
     resolved_output = None
     
     try:
@@ -669,29 +669,41 @@ async def run_pipeline_task(task_id: str, category: str, prompt: str):
         tasks_db[task_id]["progress"] = 30
         metadata = youtube_generator.generate_script_and_metadata(category, prompt)
         script_text = metadata.get("script", "")
-        keywords = metadata.get("search_keywords", category)
+        keywords = metadata.get("search_keywords", [category])
         
+        if isinstance(keywords, str):
+            keywords = [keywords]
+            
         if not script_text:
             raise Exception("Generated script text is empty.")
             
-        # 2. Search Pexels video
+        # 2. Search and download background video clips
         tasks_db[task_id]["logs"].append("Searching Pexels for matching stock footage...")
         tasks_db[task_id]["progress"] = 45
-        video_url = youtube_generator.search_pexels_video(keywords, pexels_key)
-        if not video_url:
-            fallback_urls = settings.FALLBACK_VIDEOS.get(category, settings.FALLBACK_VIDEOS["tech"])
-            video_url = random.choice(fallback_urls)
-            tasks_db[task_id]["logs"].append("No specific footage found. Using backup stock clip...")
+        
+        # Make sure we have exactly 3 keyword items to download 3 scenes
+        keywords_list = list(keywords)
+        while len(keywords_list) < 3:
+            keywords_list.append(keywords_list[-1] if keywords_list else category)
             
-        # Download video
-        tasks_db[task_id]["logs"].append("Downloading stock video footage...")
-        temp_video_name = f"bg_{uuid.uuid4().hex[:12]}.mp4"
-        local_video_path = os.path.join(settings.TEMP_DIR, temp_video_name)
-        try:
-            await run_in_threadpool(download_file_sync, video_url, local_video_path)
-        except Exception as e:
-            backup_url = settings.FALLBACK_VIDEOS["tech"][0]
-            await run_in_threadpool(download_file_sync, backup_url, local_video_path)
+        for idx, kw in enumerate(keywords_list[:3]):
+            tasks_db[task_id]["logs"].append(f"Downloading scene clip {idx+1}/3: '{kw}'...")
+            video_url = youtube_generator.search_pexels_video(kw, pexels_key)
+            if not video_url:
+                fallback_urls = settings.FALLBACK_VIDEOS.get(category, settings.FALLBACK_VIDEOS["tech"])
+                video_url = fallback_urls[idx % len(fallback_urls)]
+                tasks_db[task_id]["logs"].append(f"Clip {idx+1}/3: No matching video found, using backup stock...")
+                
+            temp_name = f"bg_{idx}_{uuid.uuid4().hex[:8]}.mp4"
+            local_path = os.path.join(settings.TEMP_DIR, temp_name)
+            try:
+                await run_in_threadpool(download_file_sync, video_url, local_path)
+                local_video_paths.append(local_path)
+            except Exception as e:
+                logger.error(f"Download failed for clip {idx+1}: {str(e)}")
+                backup_url = settings.FALLBACK_VIDEOS["tech"][idx % len(settings.FALLBACK_VIDEOS["tech"])]
+                await run_in_threadpool(download_file_sync, backup_url, local_path)
+                local_video_paths.append(local_path)
             
         # 3. Speech synthesis & Subtitle alignment
         tasks_db[task_id]["logs"].append("Synthesizing voiceover narration & aligning subtitles...")
@@ -712,19 +724,33 @@ async def run_pipeline_task(task_id: str, category: str, prompt: str):
         resolved_output = os.path.join(settings.OUTPUT_DIR, output_filename)
         duration = await get_audio_duration_ffprobe(local_voice_path)
         
-        sub_path_ffmpeg = to_posix_relative_path(local_ass_path)
-        video_filter = f"[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,subtitles={sub_path_ffmpeg}[v]"
+        # Divide duration into 3 scene segments
+        clip_dur = duration / 3.0
         
-        ffmpeg_cmd = [
-            "ffmpeg",
-            "-y",
-            "-threads", "1",
-            "-stream_loop", "-1",
-            "-i", local_video_path,
-            "-i", local_voice_path,
+        # Scale, crop, loop, trim and prepare concatenation for each of the 3 scenes
+        filter_parts = []
+        for i in range(3):
+            filter_parts.append(
+                f"[{i}:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
+                f"trim=0:{clip_dur:.3f},setpts=PTS-STARTPTS[v{i}]"
+            )
+            
+        # Concat the 3 segment video streams together
+        concat_filter = "".join(f"[v{i}]" for i in range(3)) + "concat=n=3:v=1:a=0[v_concat]"
+        
+        sub_path_ffmpeg = to_posix_relative_path(local_ass_path)
+        video_filter = f"{';'.join(filter_parts)}; {concat_filter}; [v_concat]subtitles={sub_path_ffmpeg}[v]"
+        
+        # Build multi-input FFmpeg command list
+        ffmpeg_cmd = ["ffmpeg", "-y", "-threads", "1"]
+        for path in local_video_paths:
+            ffmpeg_cmd.extend(["-stream_loop", "-1", "-i", path])
+        ffmpeg_cmd.extend(["-i", local_voice_path])
+        
+        ffmpeg_cmd.extend([
             "-filter_complex", video_filter,
             "-map", "[v]",
-            "-map", "1:a",
+            "-map", f"{len(local_video_paths)}:a",
             "-c:v", "libx264",
             "-preset", "ultrafast",
             "-crf", "24",
@@ -732,7 +758,7 @@ async def run_pipeline_task(task_id: str, category: str, prompt: str):
             "-b:a", "192k",
             "-t", f"{duration:.3f}",
             resolved_output
-        ]
+        ])
         
         process = await asyncio.create_subprocess_exec(
             *ffmpeg_cmd,
@@ -745,12 +771,13 @@ async def run_pipeline_task(task_id: str, category: str, prompt: str):
             err = stderr.decode().strip()
             raise Exception(f"FFmpeg rendering crashed: {err}")
             
-        # Clean up temporary background raw video clip
-        if local_video_path and os.path.exists(local_video_path):
-            try:
-                os.remove(local_video_path)
-            except Exception:
-                pass
+        # Clean up temporary background raw video clips
+        for path in local_video_paths:
+            if path and os.path.exists(path):
+                try:
+                    os.remove(path)
+                except Exception:
+                    pass
                 
         # 5. Evaluate and score video
         tasks_db[task_id]["logs"].append("Analyzing performance metrics & scoring outline...")
@@ -789,11 +816,12 @@ async def run_pipeline_task(task_id: str, category: str, prompt: str):
                 os.remove(resolved_output)
             except Exception:
                 pass
-        if local_video_path and os.path.exists(local_video_path):
-            try:
-                os.remove(local_video_path)
-            except Exception:
-                pass
+        for path in local_video_paths:
+            if path and os.path.exists(path):
+                try:
+                    os.remove(path)
+                except Exception:
+                    pass
 
 @app.post("/generate_pipeline", status_code=status.HTTP_200_OK)
 async def generate_pipeline(request: PipelineRequest, background_tasks: BackgroundTasks):
