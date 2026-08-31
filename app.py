@@ -656,6 +656,9 @@ async def run_pipeline_task(task_id: str, category: str, prompt: str):
     tasks_db[task_id]["progress"] = 15
     
     local_video_paths = []
+    processed_clips = []
+    concat_list_path = None
+    merged_bg_path = None
     resolved_output = None
     
     try:
@@ -717,9 +720,9 @@ async def run_pipeline_task(task_id: str, category: str, prompt: str):
         
         await synthesize_tts_with_fallback(script_text, voice_name, local_voice_path, local_ass_path)
         
-        # 4. Composite rendering (FFmpeg)
-        tasks_db[task_id]["logs"].append("Compiling vertical video composite (FFmpeg rendering)...")
-        tasks_db[task_id]["progress"] = 80
+        # 4. Composite rendering (FFmpeg - Sequential low-RAM pipeline)
+        tasks_db[task_id]["logs"].append("Normalizing and cropping video segments (Scene 1/3)...")
+        tasks_db[task_id]["progress"] = 70
         output_filename = f"shorts_{uuid.uuid4().hex[:8]}.mp4"
         resolved_output = os.path.join(settings.OUTPUT_DIR, output_filename)
         duration = await get_audio_duration_ffprobe(local_voice_path)
@@ -727,30 +730,70 @@ async def run_pipeline_task(task_id: str, category: str, prompt: str):
         # Divide duration into 3 scene segments
         clip_dur = duration / 3.0
         
-        # Scale, crop, loop, trim and prepare concatenation for each of the 3 scenes
-        filter_parts = []
-        for i in range(3):
-            filter_parts.append(
-                f"[{i}:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
-                f"trim=0:{clip_dur:.3f},setpts=PTS-STARTPTS[v{i}]"
-            )
+        for idx, bg_path in enumerate(local_video_paths):
+            tasks_db[task_id]["logs"].append(f"Processing video segment {idx+1}/3...")
+            tasks_db[task_id]["progress"] = 70 + idx * 5
             
-        # Concat the 3 segment video streams together
-        concat_filter = "".join(f"[v{i}]" for i in range(3)) + "concat=n=3:v=1:a=0[v_concat]"
+            clip_name = f"clip_{idx}_{uuid.uuid4().hex[:8]}.mp4"
+            clip_path = os.path.join(settings.TEMP_DIR, clip_name)
+            
+            # Normalize (scale, crop to 1080x1920) and trim to clip_dur
+            ffmpeg_prep = [
+                "ffmpeg", "-y", "-threads", "1",
+                "-stream_loop", "-1",
+                "-i", bg_path,
+                "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920",
+                "-c:v", "libx264",
+                "-preset", "ultrafast",
+                "-crf", "26",
+                "-t", f"{clip_dur:.3f}",
+                "-an",
+                clip_path
+            ]
+            process = await asyncio.create_subprocess_exec(*ffmpeg_prep, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            await process.communicate()
+            if process.returncode == 0:
+                processed_clips.append(clip_path)
+            else:
+                raise Exception(f"Failed to normalize clip {idx+1}")
+                
+        # Merge the normalized clips using the zero-reencode concat demuxer
+        tasks_db[task_id]["logs"].append("Merging scenes together...")
+        tasks_db[task_id]["progress"] = 85
+        
+        concat_list_path = os.path.join(settings.TEMP_DIR, f"list_{uuid.uuid4().hex[:8]}.txt")
+        with open(concat_list_path, "w", encoding="utf-8") as f:
+            for p in processed_clips:
+                escaped_path = p.replace("\\", "/")
+                f.write(f"file '{escaped_path}'\n")
+                
+        merged_bg_path = os.path.join(settings.TEMP_DIR, f"merged_bg_{uuid.uuid4().hex[:8]}.mp4")
+        ffmpeg_merge = [
+            "ffmpeg", "-y",
+            "-f", "concat",
+            "-safe", "0",
+            "-i", concat_list_path,
+            "-c", "copy",
+            merged_bg_path
+        ]
+        process = await asyncio.create_subprocess_exec(*ffmpeg_merge, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        await process.communicate()
+        
+        if process.returncode != 0:
+            raise Exception("Concat demuxer failed during merge step")
+            
+        # Burn subtitles and voiceover on the merged video file
+        tasks_db[task_id]["logs"].append("Overlaying voiceover & burning captions...")
+        tasks_db[task_id]["progress"] = 90
         
         sub_path_ffmpeg = to_posix_relative_path(local_ass_path)
-        video_filter = f"{';'.join(filter_parts)}; {concat_filter}; [v_concat]subtitles={sub_path_ffmpeg}[v]"
-        
-        # Build multi-input FFmpeg command list
-        ffmpeg_cmd = ["ffmpeg", "-y", "-threads", "1"]
-        for path in local_video_paths:
-            ffmpeg_cmd.extend(["-stream_loop", "-1", "-i", path])
-        ffmpeg_cmd.extend(["-i", local_voice_path])
-        
-        ffmpeg_cmd.extend([
-            "-filter_complex", video_filter,
-            "-map", "[v]",
-            "-map", f"{len(local_video_paths)}:a",
+        ffmpeg_final = [
+            "ffmpeg", "-y", "-threads", "1",
+            "-i", merged_bg_path,
+            "-i", local_voice_path,
+            "-vf", f"subtitles={sub_path_ffmpeg}",
+            "-map", "0:v",
+            "-map", "1:a",
             "-c:v", "libx264",
             "-preset", "ultrafast",
             "-crf", "24",
@@ -758,21 +801,18 @@ async def run_pipeline_task(task_id: str, category: str, prompt: str):
             "-b:a", "192k",
             "-t", f"{duration:.3f}",
             resolved_output
-        ])
+        ]
         
-        process = await asyncio.create_subprocess_exec(
-            *ffmpeg_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
+        process = await asyncio.create_subprocess_exec(*ffmpeg_final, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         stdout, stderr = await process.communicate()
         
         if process.returncode != 0:
             err = stderr.decode().strip()
-            raise Exception(f"FFmpeg rendering crashed: {err}")
+            raise Exception(f"Final composition stage failed: {err}")
             
-        # Clean up temporary background raw video clips
-        for path in local_video_paths:
+        # Clean up temporary background raw video clips, preprocessed clips, lists and merged temp backgrounds
+        temp_cleanup_files = local_video_paths + processed_clips + [concat_list_path, merged_bg_path]
+        for path in temp_cleanup_files:
             if path and os.path.exists(path):
                 try:
                     os.remove(path)
@@ -816,7 +856,12 @@ async def run_pipeline_task(task_id: str, category: str, prompt: str):
                 os.remove(resolved_output)
             except Exception:
                 pass
-        for path in local_video_paths:
+        temp_cleanup_files = local_video_paths + processed_clips
+        if concat_list_path:
+            temp_cleanup_files.append(concat_list_path)
+        if merged_bg_path:
+            temp_cleanup_files.append(merged_bg_path)
+        for path in temp_cleanup_files:
             if path and os.path.exists(path):
                 try:
                     os.remove(path)
