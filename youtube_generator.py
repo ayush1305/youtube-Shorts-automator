@@ -32,10 +32,13 @@ def generate_script_and_metadata(category: str, topic_keywords: str) -> dict:
         logger.info(f"No Gemini API key found. Using fallback library for category '{category}'")
         return get_fallback_script(category)
         
+    import time
     prompt = f"""
     You are an expert YouTube content creator specializing in short-form viral videos (YouTube Shorts, TikToks).
     Generate a high-retention script and metadata for a video about: {topic_keywords if topic_keywords else 'a trending topic in ' + cat_desc}.
     The category is: {cat_desc}.
+    
+    Random seed/timestamp: {time.time()} (Ensure you generate a completely fresh, creative, and unique script and metadata that differs from prior runs).
     
     Ensure the script:
     1. Is around 30 to 45 seconds long when spoken (70 to 110 words).
@@ -58,7 +61,10 @@ def generate_script_and_metadata(category: str, topic_keywords: str) -> dict:
     try:
         response = model.generate_content(
             prompt,
-            generation_config={"response_mime_type": "application/json"}
+            generation_config={
+                "response_mime_type": "application/json",
+                "temperature": 1.0
+            }
         )
         data = json.loads(response.text)
         logger.info(f"Successfully generated script via Gemini: {data.get('title')}")
