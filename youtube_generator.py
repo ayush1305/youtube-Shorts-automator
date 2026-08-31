@@ -261,9 +261,12 @@ def get_what_to_post_today(category: str) -> dict:
         logger.info(f"No Gemini API key found. Using fallback posting recommendations for category '{category}'")
         return get_fallback_recommendations(category)
         
+    import time
     prompt = f"""
     You are a social media trends expert. Suggest 3 trending and highly viral video ideas to post today in the category of '{cat_name}'.
     For each idea, provide a viral title, an engaging caption/description with hashtags, and a strategic viral angle (pacing / Hook).
+    
+    Random seed/timestamp: {time.time()} (Ensure you generate fresh, unique, and completely different ideas than prior requests).
     
     Return a valid JSON object with the following structure (do not include markdown wrapping, return only raw JSON):
     {{
@@ -282,7 +285,10 @@ def get_what_to_post_today(category: str) -> dict:
     try:
         response = model.generate_content(
             prompt,
-            generation_config={"response_mime_type": "application/json"}
+            generation_config={
+                "response_mime_type": "application/json",
+                "temperature": 1.0
+            }
         )
         return json.loads(response.text)
     except Exception as e:
