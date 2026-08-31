@@ -737,12 +737,14 @@ async def run_pipeline_task(task_id: str, category: str, prompt: str):
             clip_name = f"clip_{idx}_{uuid.uuid4().hex[:8]}.mp4"
             clip_path = os.path.join(settings.TEMP_DIR, clip_name)
             
-            # Normalize (scale, crop to 1080x1920) and trim to clip_dur
+            # Normalize (scale, crop to 1080x1920, force 24 FPS and standard pixel format) and trim to clip_dur
             ffmpeg_prep = [
                 "ffmpeg", "-y", "-threads", "1",
                 "-stream_loop", "-1",
                 "-i", bg_path,
                 "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920",
+                "-r", "24",
+                "-pix_fmt", "yuv420p",
                 "-c:v", "libx264",
                 "-preset", "ultrafast",
                 "-crf", "26",
