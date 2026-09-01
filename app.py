@@ -245,8 +245,8 @@ def get_usage() -> int:
             pass
     return 0
 
-async def synthesize_tts_with_fallback(text: str, voice: str, audio_path: str, ass_path: str) -> None:
-    """Synthesize speech using edge-tts and compile ASS subtitles with sentence fallback."""
+async def synthesize_tts_with_fallback(text: str, voice: str, audio_path: str, ass_path: str, hook_text: str = "") -> None:
+    """Synthesize speech using edge-tts and compile ASS subtitles with sentence fallback and visual hook banner."""
     import edge_tts
     communicate = edge_tts.Communicate(text, voice)
     
@@ -306,8 +306,8 @@ async def synthesize_tts_with_fallback(text: str, voice: str, audio_path: str, a
                 "end": end
             })
 
-    # Write styled ASS subtitle file
-    youtube_generator.generate_ass_file(word_boundaries, ass_path)
+    # Write styled ASS subtitle file with top-center Hook banner
+    youtube_generator.generate_ass_file(word_boundaries, ass_path, hook_text)
 
 # =====================================================================
 # API Endpoints
@@ -672,6 +672,7 @@ async def run_pipeline_task(task_id: str, category: str, prompt: str):
         tasks_db[task_id]["progress"] = 30
         metadata = youtube_generator.generate_script_and_metadata(category, prompt)
         script_text = metadata.get("script", "")
+        hook_text = metadata.get("hook_text", "WAIT TILL THE END! 🤯")
         keywords = metadata.get("search_keywords", [category])
         
         if isinstance(keywords, str):
@@ -708,8 +709,8 @@ async def run_pipeline_task(task_id: str, category: str, prompt: str):
                 await run_in_threadpool(download_file_sync, backup_url, local_path)
                 local_video_paths.append(local_path)
             
-        # 3. Speech synthesis & Subtitle alignment
-        tasks_db[task_id]["logs"].append("Synthesizing voiceover narration & aligning subtitles...")
+        # 3. Speech synthesis & Subtitle alignment with Hook Banner
+        tasks_db[task_id]["logs"].append("Synthesizing voiceover narration & aligning hook captions...")
         tasks_db[task_id]["progress"] = 60
         voice_name = "en-US-GuyNeural"
         dest_voice_name = f"voice_{uuid.uuid4().hex[:8]}.mp3"
@@ -718,7 +719,7 @@ async def run_pipeline_task(task_id: str, category: str, prompt: str):
         ass_filename = f"subtitles_{uuid.uuid4().hex[:8]}.ass"
         local_ass_path = os.path.join(settings.TEMP_DIR, ass_filename)
         
-        await synthesize_tts_with_fallback(script_text, voice_name, local_voice_path, local_ass_path)
+        await synthesize_tts_with_fallback(script_text, voice_name, local_voice_path, local_ass_path, hook_text)
         
         # 4. Composite rendering (FFmpeg - Sequential low-RAM pipeline)
         tasks_db[task_id]["logs"].append("Normalizing and cropping video segments (Scene 1/3)...")
@@ -784,18 +785,31 @@ async def run_pipeline_task(task_id: str, category: str, prompt: str):
         if process.returncode != 0:
             raise Exception("Concat demuxer failed during merge step")
             
-        # Burn subtitles and voiceover on the merged video file
-        tasks_db[task_id]["logs"].append("Overlaying voiceover & burning captions...")
+        # Prepare category background music track
+        local_music_path = await run_in_threadpool(youtube_generator.ensure_music_track, category, settings.MUSIC_DIR)
+        
+        # Burn subtitles, mix voiceover and subtle background music on the merged video file
+        tasks_db[task_id]["logs"].append("Overlaying voiceover, subtle background music & burning captions...")
         tasks_db[task_id]["progress"] = 90
         
         sub_path_ffmpeg = to_posix_relative_path(local_ass_path)
+        
+        # Mix voiceover with low-volume background music (volume 0.10: 10% volume so voice is crystal-clear)
+        filter_complex_final = (
+            f"[0:v]subtitles={sub_path_ffmpeg}[v]; "
+            f"[2:a]volume=0.10[bgm]; "
+            f"[1:a][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+        )
+        
         ffmpeg_final = [
             "ffmpeg", "-y", "-threads", "1",
             "-i", merged_bg_path,
             "-i", local_voice_path,
-            "-vf", f"subtitles={sub_path_ffmpeg}",
-            "-map", "0:v",
-            "-map", "1:a",
+            "-stream_loop", "-1",
+            "-i", local_music_path,
+            "-filter_complex", filter_complex_final,
+            "-map", "[v]",
+            "-map", "[aout]",
             "-c:v", "libx264",
             "-preset", "ultrafast",
             "-crf", "24",
@@ -841,6 +855,7 @@ async def run_pipeline_task(task_id: str, category: str, prompt: str):
             "video_url": f"/{relative_output_video}",
             "metadata": {
                 "title": metadata.get("title", "Untitled Short"),
+                "hook_text": hook_text,
                 "description": metadata.get("description", ""),
                 "tags": metadata.get("tags", []),
                 "script": script_text,

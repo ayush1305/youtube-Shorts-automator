@@ -42,15 +42,17 @@ def generate_script_and_metadata(category: str, topic_keywords: str) -> dict:
     
     Ensure the script:
     1. Is around 30 to 45 seconds long when spoken (70 to 110 words).
-    2. Starts with a powerful attention-grabbing hook in the first 3 seconds.
+    2. Starts with a powerful, curiosity-driven opening hook in the first 3-5 seconds (e.g. asking a shocking question, revealing a crazy fact, or teasing a mind-blowing reveal) that makes viewers curious and eager to wait until the video ends.
     3. Explains the concept in a fast-paced, highly engaging, and clear conversational style.
     4. Has a short call to action at the end (e.g., "subscribe for more", "let me know in the comments").
     5. Write the script as plain spoken English text without stage directions, sound effect indicators, or bracketed text like [music plays]. Only output the exact words the voiceover will speak.
     6. Provide exactly 10 tags in the "tags" array. Every tag must be a high-volume viral search tag (with 10M+ views or uses) relevant to the topic (e.g., shorts, trending, viral, science, tech, facts, and topic-specific highly searched keywords). Return them as plain strings without the '#' symbol.
+    7. Provide a short, punchy 3 to 6 word visual hook banner in ALL CAPS with emojis for the "hook_text" field (e.g., "WAIT TILL THE END! 🤯", "DON'T SCROLL: CRAZY SECRET! 🚨", "THE TRUTH REVEALED 🤫").
     
     Return a valid JSON object with the following fields (do not include markdown wrapping, return only raw JSON):
     {{
       "title": "An attention-grabbing title under 60 characters with emojis",
+      "hook_text": "WAIT TILL THE END! 🤯",
       "description": "An engaging, SEO-friendly description containing relevant hashtags",
       "tags": ["shorts", "trending", "viral", "foryou", "science", "physics", "earth", "nature", "space", "facts"],
       "script": "The spoken voiceover script text",
@@ -131,8 +133,8 @@ def format_ass_time(seconds: float) -> str:
         cs = 0
     return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
 
-def generate_ass_file(word_boundaries: list, ass_path: str) -> None:
-    """Group words into fast-paced subtitle cues and write an Advanced SubStation Alpha (.ass) file."""
+def generate_ass_file(word_boundaries: list, ass_path: str, hook_text: str = "") -> None:
+    """Group words into fast-paced subtitle cues and write an Advanced SubStation Alpha (.ass) file with top-center visual hook banner."""
     if not word_boundaries:
         logger.warning("No word boundaries provided to subtitle generator.")
         return
@@ -155,6 +157,12 @@ def generate_ass_file(word_boundaries: list, ass_path: str) -> None:
         groups.append(current_group)
 
     lines = []
+    
+    # Add top-center Hook banner for the first 4.5 seconds with smooth fade-in/fade-out
+    clean_hook = hook_text.strip() if hook_text else ""
+    if clean_hook:
+        lines.append(f"Dialogue: 1,0:00:00.00,0:00:04.50,HookBanner,,0,0,0,,{{\\fade(150,300)}}🔥 {clean_hook} 🔥")
+
     for g in groups:
         group_start = g[0]["start"]
         group_end = g[-1]["end"]
@@ -182,7 +190,7 @@ def generate_ass_file(word_boundaries: list, ass_path: str) -> None:
             # Dialogue: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             lines.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{cue_text}")
 
-    # ASS Subtitle definition headers (Arial Black style, bold, sized 32, centered in the video)
+    # ASS Subtitle definition headers (Arial Black style, bold, sized 34, centered in the video + HookBanner at top-center)
     ASS_TEMPLATE = """[Script Info]
 ScriptType: v4.00+
 PlayResX: 1080
@@ -192,6 +200,7 @@ ScaledBorderAndShadow: yes
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,Arial Black,34,&H00FFFFFF,&H0000FFFF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,4,0,5,10,10,10,1
+Style: HookBanner,Arial Black,42,&H0000FFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,4,2,8,20,20,130,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -311,6 +320,7 @@ def get_fallback_script(category: str) -> dict:
         "tech": [
             {
                 "title": "Why Quantum Computing is a Cheat Code! 💻⚡",
+                "hook_text": "WAIT TILL THE END! 💻⚡",
                 "description": "Quantum computers are not just normal computers but faster. Here is how they work and why they are going to change medicine, encryption, and the entire digital world forever! #quantumcomputing #tech #future #science",
                 "tags": ["shorts", "trending", "viral", "foryou", "tech", "quantumcomputing", "futuretech", "computers", "science", "innovation"],
                 "script": "The quantum computing revolution is closer than you think! Standard computers use bits, which are either zero or one. But quantum computers use qubits, which can be both at the same time! This means they can solve complex problems in seconds that would take our best supercomputers thousands of years. From breaking encryption to inventing new medicines, quantum computing is about to change everything. Are you ready for this future? Let me know in the comments!",
@@ -318,6 +328,7 @@ def get_fallback_script(category: str) -> dict:
             },
             {
                 "title": "NASA's Moon Tech vs Your Phone! 🚀📱",
+                "hook_text": "DON'T SCROLL: MOON TECH! 🚀",
                 "description": "Compare the computing power of the NASA Apollo space program to the smartphone in your pocket. You won't believe how far technology has scaled! #space #techhistory #smartphone #nasa #funfacts",
                 "tags": ["shorts", "trending", "viral", "foryou", "nasa", "space", "smartphone", "techhistory", "engineering", "facts"],
                 "script": "Your smartphone has more computing power than all of NASA did when they sent astronauts to the Moon in 1969! That's right—the device in your pocket is millions of times faster. It shows how rapidly technology is scaling. If this pace continues, what will technology look like in another fifty years? Drop your thoughts below and subscribe for more mind-blowing tech facts!",
@@ -327,6 +338,7 @@ def get_fallback_script(category: str) -> dict:
         "history": [
             {
                 "title": "The Shortest War in History (Only 38 Mins!) ⏱️💥",
+                "hook_text": "THE 38-MINUTE WAR! ⏱️💥",
                 "description": "The Anglo-Zanzibar war of 1896 remains the shortest war ever recorded. Here is how it went down and why it was over before it even started! #historyfacts #funfacts #britishhistory #militaryhistory",
                 "tags": ["shorts", "trending", "viral", "foryou", "history", "historyfacts", "war", "britishhistory", "weirdhistory", "learn"],
                 "script": "Did you know that the shortest war in history lasted only thirty-eight minutes? It happened in 1896 between the British Empire and the Sultanate of Zanzibar. The Sultan died, a usurper took power, and the British fleet immediately opened fire on the palace. In less than forty minutes, the new Sultan's forces surrendered. Talk about a quick defeat! Subscribe for more historic facts!",
@@ -334,6 +346,7 @@ def get_fallback_script(category: str) -> dict:
             },
             {
                 "title": "The Pyramid Mystery Solved! 🔺🏗️",
+                "hook_text": "PYRAMID SECRET REVEALED! 🔺",
                 "description": "New evidence changes everything we knew about how the pyramids were built. Spoiler: it wasn't slaves! #pyramids #egypt #ancienthistory #secrets #historical",
                 "tags": ["shorts", "trending", "viral", "foryou", "egypt", "pyramids", "ancienthistory", "archaeology", "mysteries", "engineering"],
                 "script": "Did you know that the ancient Egyptians did not build the pyramids using slaves? Archaeological discoveries of workers' tombs show they were actually paid laborers. They were highly respected craftsmen who ate meat and drank beer daily. Building the pyramids was a matter of national pride, not slavery. Subscribe to discover more history secrets!",
@@ -343,6 +356,7 @@ def get_fallback_script(category: str) -> dict:
         "how_why": [
             {
                 "title": "Why the Sky is NOT Blue Because of the Ocean! 🌌⛅",
+                "hook_text": "WHY THE SKY IS BLUE! 🌌",
                 "description": "Learn the actual physics behind why the sky appears blue. Hint: it is not the ocean reflection, but a physics process called Rayleigh scattering! #sciencefacts #whytheskyisblue #physics #howitworks",
                 "tags": ["shorts", "trending", "viral", "foryou", "science", "physics", "sky", "earth", "nature", "explain"],
                 "script": "Why is the sky blue? It's not because it reflects the ocean! It's actually due to a phenomenon called Rayleigh scattering. Sunlight contains all colors of the rainbow, but blue light travels in shorter, smaller waves. When it hits Earth's atmosphere, it scatters in all directions, coloring the sky. Subscribe to learn why the universe works the way it does!",
@@ -350,6 +364,7 @@ def get_fallback_script(category: str) -> dict:
             },
             {
                 "title": "The Caffeine Trick on Your Brain! ☕🧠",
+                "hook_text": "THE COFFEE BRAIN TRICK! ☕",
                 "description": "How does coffee actually keep you awake? It doesn't give you energy, it tricks your brain structure! #coffee #science #brain #caffeine #healthylifestyle",
                 "tags": ["shorts", "trending", "viral", "foryou", "coffee", "caffeine", "brain", "health", "science", "biology"],
                 "script": "Why does coffee actually make you feel awake? It doesn't actually give you energy! Instead, caffeine blockades adenosine, a chemical in your brain that signals tiredness. By binding to adenosine receptors, caffeine tricks your brain into thinking you are fully awake. That's why you crash when it wears off! Let me know your coffee routine in the comments!",
@@ -439,3 +454,45 @@ def get_fallback_recommendations(category: str) -> dict:
         "category": category,
         "recommendations": topics[cat]
     }
+
+def ensure_music_track(category: str, music_dir: str) -> str:
+    """Ensure background music track exists for category, generating a clean harmonic ambient track if missing."""
+    import subprocess
+    os.makedirs(music_dir, exist_ok=True)
+    cat = category if category in ["tech", "history", "how_why"] else "tech"
+    music_file = os.path.join(music_dir, f"{cat}.mp3")
+    if os.path.exists(music_file) and os.path.getsize(music_file) > 1000:
+        return music_file
+        
+    if cat == "tech":
+        filter_expr = (
+            "aevalsrc='0.08*sin(2*PI*220*t) + 0.06*sin(2*PI*277.18*t) + 0.07*sin(2*PI*329.63*t) + "
+            "0.05*sin(2*PI*440*t)*sin(2*PI*0.5*t)':s=44100:d=60,"
+            "lowpass=f=800,chorus=0.7:0.9:55:0.4:0.25:2"
+        )
+    elif cat == "history":
+        filter_expr = (
+            "aevalsrc='0.09*sin(2*PI*110*t) + 0.07*sin(2*PI*164.81*t) + 0.05*sin(2*PI*220*t) + "
+            "0.04*sin(2*PI*330*t)*sin(2*PI*0.2*t)':s=44100:d=60,"
+            "lowpass=f=600,flanger=delay=10:depth=3:regen=20"
+        )
+    else:
+        filter_expr = (
+            "aevalsrc='0.07*sin(2*PI*261.63*t) + 0.06*sin(2*PI*329.63*t) + 0.06*sin(2*PI*392*t) + "
+            "0.05*sin(2*PI*523.25*t)*sin(2*PI*1.0*t)':s=44100:d=60,"
+            "lowpass=f=1200,chorus=0.6:0.8:40:0.3:0.2:2"
+        )
+    
+    cmd = [
+        "ffmpeg", "-y", "-f", "lavfi",
+        "-i", filter_expr,
+        "-c:a", "libmp3lame",
+        "-b:a", "128k",
+        music_file
+    ]
+    try:
+        subprocess.run(cmd, capture_output=True, timeout=15)
+        logger.info(f"Generated harmonic background music for {cat} at {music_file}")
+    except Exception as e:
+        logger.error(f"Failed to generate ambient music: {e}")
+    return music_file
