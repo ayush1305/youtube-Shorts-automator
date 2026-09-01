@@ -42,7 +42,7 @@ def generate_script_and_metadata(category: str, topic_keywords: str) -> dict:
     
     Ensure the script:
     1. Is around 30 to 45 seconds long when spoken (70 to 110 words).
-    2. Starts with a powerful, curiosity-driven opening hook in the first 3-5 seconds (e.g., asking "Did you know...?", revealing an unbelievable secret, or posing a mind-bending mystery) that makes the viewer instantly stop scrolling.
+    2. Starts with a high-energy, exciting, and curiosity-driven opening hook in the first 3-5 seconds (e.g., an enthusiastic "Did you know this crazy fact?!" or a shocking mystery reveal) formatted with expressive punctuation (! and ?) so the voiceover sounds genuinely excited, engaging, and enthusiastic from the very first second.
     3. Explains the concept in a fast-paced, highly engaging, and clear conversational style.
     4. MUST conclude with an engaging call-to-action asking viewers what topic they want to see next (e.g., "What topic do you want next? Let me know in the comments and subscribe!").
     5. Write the script as plain spoken English text without stage directions, sound effect indicators, or bracketed text like [music plays]. Only output the exact words the voiceover will speak.

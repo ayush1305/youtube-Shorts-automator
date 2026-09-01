@@ -248,7 +248,7 @@ def get_usage() -> int:
 async def synthesize_tts_with_fallback(text: str, voice: str, audio_path: str, ass_path: str, hook_text: str = "") -> None:
     """Synthesize speech using edge-tts and compile ASS subtitles with sentence fallback and visual hook banner."""
     import edge_tts
-    communicate = edge_tts.Communicate(text, voice)
+    communicate = edge_tts.Communicate(text, voice, rate="+5%", pitch="+2Hz")
     
     word_boundaries = []
     sentence_boundaries = []
