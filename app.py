@@ -248,7 +248,7 @@ def get_usage() -> int:
 async def synthesize_tts_with_fallback(text: str, voice: str, audio_path: str, ass_path: str, hook_text: str = "") -> None:
     """Synthesize speech using edge-tts and compile ASS subtitles with sentence fallback and visual hook banner."""
     import edge_tts
-    communicate = edge_tts.Communicate(text, voice, rate="+5%", pitch="+2Hz")
+    communicate = edge_tts.Communicate(text, voice, rate="+12%", pitch="+7Hz")
     
     word_boundaries = []
     sentence_boundaries = []
@@ -712,7 +712,7 @@ async def run_pipeline_task(task_id: str, category: str, prompt: str):
         # 3. Speech synthesis & Subtitle alignment with Hook Banner
         tasks_db[task_id]["logs"].append("Synthesizing voiceover narration & aligning hook captions...")
         tasks_db[task_id]["progress"] = 60
-        voice_name = "en-US-GuyNeural"
+        voice_name = "en-US-ChristopherNeural"
         dest_voice_name = f"voice_{uuid.uuid4().hex[:8]}.mp3"
         local_voice_path = os.path.join(settings.OUTPUT_DIR, dest_voice_name)
         

@@ -158,10 +158,10 @@ def generate_ass_file(word_boundaries: list, ass_path: str, hook_text: str = "")
 
     lines = []
     
-    # Add top-center Hook banner for the first 4.5 seconds with smooth fade-in/fade-out
+    # Add Upper-Center popping Hook Badge for the first 4.0 seconds with zoom-bounce animation
     clean_hook = hook_text.strip() if hook_text else ""
     if clean_hook:
-        lines.append(f"Dialogue: 1,0:00:00.00,0:00:04.50,HookBanner,,0,0,0,,{{\\fade(150,300)}}🔥 {clean_hook} 🔥")
+        lines.append(f"Dialogue: 1,0:00:00.00,0:00:04.00,HookBanner,,0,0,0,,{{\\fade(100,250)\\t(0,180,\\fscx118\\fscy118)\\t(180,360,\\fscx100\\fscy100)}}🚨 {clean_hook} 🚨")
 
     for g in groups:
         group_start = g[0]["start"]
@@ -190,16 +190,16 @@ def generate_ass_file(word_boundaries: list, ass_path: str, hook_text: str = "")
             # Dialogue: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             lines.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{cue_text}")
 
-    # Add top-center Outro Call-To-Action banner for the last 3.8 seconds
+    # Add Upper-Center Outro Call-To-Action banner for the last 3.8 seconds
     if groups:
         total_end_time = groups[-1][-1]["end"]
         if total_end_time > 6.0:
-            outro_start = max(4.5, total_end_time - 3.8)
+            outro_start = max(4.0, total_end_time - 3.8)
             outro_start_str = format_ass_time(outro_start)
             outro_end_str = format_ass_time(total_end_time + 0.5)
-            lines.append(f"Dialogue: 1,{outro_start_str},{outro_end_str},HookBanner,,0,0,0,,{{\\fade(200,200)}}💬 WHAT TOPIC NEXT? COMMENT! 👇")
+            lines.append(f"Dialogue: 1,{outro_start_str},{outro_end_str},HookBanner,,0,0,0,,{{\\fade(200,200)\\t(0,180,\\fscx112\\fscy112)\\t(180,360,\\fscx100\\fscy100)}}💬 WHAT TOPIC NEXT? COMMENT! 👇")
 
-    # ASS Subtitle definition headers (Arial Black style, bold, sized 34, centered in the video + HookBanner at top-center)
+    # ASS Subtitle definition headers (Arial Black style, bold, centered captions + dynamic HookBadge)
     ASS_TEMPLATE = """[Script Info]
 ScriptType: v4.00+
 PlayResX: 1080
@@ -208,8 +208,8 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Arial Black,34,&H00FFFFFF,&H0000FFFF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,4,0,5,10,10,10,1
-Style: HookBanner,Arial Black,56,&H0000FFFF,&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,0,0,1,5,3,8,20,20,140,1
+Style: Default,Arial Black,36,&H00FFFFFF,&H0000FFFF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,4,0,5,10,10,10,1
+Style: HookBanner,Arial Black,60,&H0000FFFF,&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,0,0,1,6,3,8,20,20,360,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
