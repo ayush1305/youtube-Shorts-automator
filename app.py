@@ -672,7 +672,7 @@ async def run_pipeline_task(task_id: str, category: str, prompt: str):
         tasks_db[task_id]["progress"] = 30
         metadata = youtube_generator.generate_script_and_metadata(category, prompt)
         script_text = metadata.get("script", "")
-        hook_text = metadata.get("hook_text", "WAIT TILL THE END! 🤯")
+        hook_text = metadata.get("hook_text", "DID YOU KNOW THIS? 🤯")
         keywords = metadata.get("search_keywords", [category])
         
         if isinstance(keywords, str):

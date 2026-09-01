@@ -42,17 +42,17 @@ def generate_script_and_metadata(category: str, topic_keywords: str) -> dict:
     
     Ensure the script:
     1. Is around 30 to 45 seconds long when spoken (70 to 110 words).
-    2. Starts with a powerful, curiosity-driven opening hook in the first 3-5 seconds (e.g. asking a shocking question, revealing a crazy fact, or teasing a mind-blowing reveal) that makes viewers curious and eager to wait until the video ends.
+    2. Starts with a powerful, curiosity-driven opening hook in the first 3-5 seconds (e.g., asking "Did you know...?", revealing an unbelievable secret, or posing a mind-bending mystery) that makes the viewer instantly stop scrolling.
     3. Explains the concept in a fast-paced, highly engaging, and clear conversational style.
     4. MUST conclude with an engaging call-to-action asking viewers what topic they want to see next (e.g., "What topic do you want next? Let me know in the comments and subscribe!").
     5. Write the script as plain spoken English text without stage directions, sound effect indicators, or bracketed text like [music plays]. Only output the exact words the voiceover will speak.
     6. Provide exactly 10 tags in the "tags" array. Every tag must be a high-volume viral search tag (with 10M+ views or uses) relevant to the topic (e.g., shorts, trending, viral, science, tech, facts, and topic-specific highly searched keywords). Return them as plain strings without the '#' symbol.
-    7. Provide a short, punchy 3 to 6 word visual hook banner in ALL CAPS with emojis for the "hook_text" field (e.g., "WAIT TILL THE END! 🤯", "DON'T SCROLL: CRAZY SECRET! 🚨", "THE TRUTH REVEALED 🤫").
+    7. Provide a short, punchy 3 to 6 word curiosity hook banner in ALL CAPS with emojis for the "hook_text" field (e.g., "DID YOU KNOW THIS? 🤯", "THE SHOCKING TRUTH! ⚡", "HOW THIS ACTUALLY WORKS! 🔬", "THE CRAZY SECRET! 🤫", "NOBODY TOLD YOU THIS! 🚨"). DO NOT use generic phrases like "WAIT TILL THE END".
     
     Return a valid JSON object with the following fields (do not include markdown wrapping, return only raw JSON):
     {{
       "title": "An attention-grabbing title under 60 characters with emojis",
-      "hook_text": "WAIT TILL THE END! 🤯",
+      "hook_text": "DID YOU KNOW THIS? 🤯",
       "description": "An engaging, SEO-friendly description containing relevant hashtags",
       "tags": ["shorts", "trending", "viral", "foryou", "science", "physics", "earth", "nature", "space", "facts"],
       "script": "The spoken voiceover script text",
@@ -329,7 +329,7 @@ def get_fallback_script(category: str) -> dict:
         "tech": [
             {
                 "title": "Why Quantum Computing is a Cheat Code! 💻⚡",
-                "hook_text": "WAIT TILL THE END! 💻⚡",
+                "hook_text": "DID YOU KNOW THIS? 💻⚡",
                 "description": "Quantum computers are not just normal computers but faster. Here is how they work and why they are going to change medicine, encryption, and the entire digital world forever! #quantumcomputing #tech #future #science",
                 "tags": ["shorts", "trending", "viral", "foryou", "tech", "quantumcomputing", "futuretech", "computers", "science", "innovation"],
                 "script": "The quantum computing revolution is closer than you think! Standard computers use bits, which are either zero or one. But quantum computers use qubits, which can be both at the same time! This means they can solve complex problems in seconds that would take our best supercomputers thousands of years. From breaking encryption to inventing new medicines, quantum computing is about to change everything. What topic should I cover next? Let me know in the comments and subscribe!",
@@ -337,7 +337,7 @@ def get_fallback_script(category: str) -> dict:
             },
             {
                 "title": "NASA's Moon Tech vs Your Phone! 🚀📱",
-                "hook_text": "DON'T SCROLL: MOON TECH! 🚀",
+                "hook_text": "THE CRAZY MOON SECRET! 🚀📱",
                 "description": "Compare the computing power of the NASA Apollo space program to the smartphone in your pocket. You won't believe how far technology has scaled! #space #techhistory #smartphone #nasa #funfacts",
                 "tags": ["shorts", "trending", "viral", "foryou", "nasa", "space", "smartphone", "techhistory", "engineering", "facts"],
                 "script": "Your smartphone has more computing power than all of NASA did when they sent astronauts to the Moon in 1969! That's right—the device in your pocket is millions of times faster. It shows how rapidly technology is scaling. If this pace continues, what will technology look like in another fifty years? What topic do you want next? Let me know in the comments and subscribe!",
@@ -347,7 +347,7 @@ def get_fallback_script(category: str) -> dict:
         "history": [
             {
                 "title": "The Shortest War in History (Only 38 Mins!) ⏱️💥",
-                "hook_text": "THE 38-MINUTE WAR! ⏱️💥",
+                "hook_text": "DID YOU KNOW THIS? ⏱️💥",
                 "description": "The Anglo-Zanzibar war of 1896 remains the shortest war ever recorded. Here is how it went down and why it was over before it even started! #historyfacts #funfacts #britishhistory #militaryhistory",
                 "tags": ["shorts", "trending", "viral", "foryou", "history", "historyfacts", "war", "britishhistory", "weirdhistory", "learn"],
                 "script": "Did you know that the shortest war in history lasted only thirty-eight minutes? It happened in 1896 between the British Empire and the Sultanate of Zanzibar. The Sultan died, a usurper took power, and the British fleet immediately opened fire on the palace. In less than forty minutes, the new Sultan's forces surrendered. Talk about a quick defeat! What historical topic should I cover next? Let me know in the comments and subscribe!",
@@ -355,7 +355,7 @@ def get_fallback_script(category: str) -> dict:
             },
             {
                 "title": "The Pyramid Mystery Solved! 🔺🏗️",
-                "hook_text": "PYRAMID SECRET REVEALED! 🔺",
+                "hook_text": "THE HIDDEN PYRAMID TRUTH! 🔺",
                 "description": "New evidence changes everything we knew about how the pyramids were built. Spoiler: it wasn't slaves! #pyramids #egypt #ancienthistory #secrets #historical",
                 "tags": ["shorts", "trending", "viral", "foryou", "egypt", "pyramids", "ancienthistory", "archaeology", "mysteries", "engineering"],
                 "script": "Did you know that the ancient Egyptians did not build the pyramids using slaves? Archaeological discoveries of workers' tombs show they were actually paid laborers. They were highly respected craftsmen who ate meat and drank beer daily. Building the pyramids was a matter of national pride, not slavery. What mystery should I cover next? Let me know in the comments and subscribe!",
@@ -365,7 +365,7 @@ def get_fallback_script(category: str) -> dict:
         "how_why": [
             {
                 "title": "Why the Sky is NOT Blue Because of the Ocean! 🌌⛅",
-                "hook_text": "WHY THE SKY IS BLUE! 🌌",
+                "hook_text": "DID YOU KNOW THIS? 🌌⛅",
                 "description": "Learn the actual physics behind why the sky appears blue. Hint: it is not the ocean reflection, but a physics process called Rayleigh scattering! #sciencefacts #whytheskyisblue #physics #howitworks",
                 "tags": ["shorts", "trending", "viral", "foryou", "science", "physics", "sky", "earth", "nature", "explain"],
                 "script": "Why is the sky blue? It's not because it reflects the ocean! It's actually due to a phenomenon called Rayleigh scattering. Sunlight contains all colors of the rainbow, but blue light travels in shorter, smaller waves. When it hits Earth's atmosphere, it scatters in all directions, coloring the sky. What science question should I answer next? Let me know in the comments and subscribe!",
@@ -373,7 +373,7 @@ def get_fallback_script(category: str) -> dict:
             },
             {
                 "title": "The Caffeine Trick on Your Brain! ☕🧠",
-                "hook_text": "THE COFFEE BRAIN TRICK! ☕",
+                "hook_text": "HOW COFFEE TRICKS YOU! ☕🧠",
                 "description": "How does coffee actually keep you awake? It doesn't give you energy, it tricks your brain structure! #coffee #science #brain #caffeine #healthylifestyle",
                 "tags": ["shorts", "trending", "viral", "foryou", "coffee", "caffeine", "brain", "health", "science", "biology"],
                 "script": "Why does coffee actually make you feel awake? It doesn't actually give you energy! Instead, caffeine blockades adenosine, a chemical in your brain that signals tiredness. By binding to adenosine receptors, caffeine tricks your brain into thinking you are fully awake. That's why you crash when it wears off! What topic do you want to learn about next? Let me know in the comments and subscribe!",
