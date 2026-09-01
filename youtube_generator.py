@@ -44,7 +44,7 @@ def generate_script_and_metadata(category: str, topic_keywords: str) -> dict:
     1. Is around 30 to 45 seconds long when spoken (70 to 110 words).
     2. Starts with a powerful, curiosity-driven opening hook in the first 3-5 seconds (e.g. asking a shocking question, revealing a crazy fact, or teasing a mind-blowing reveal) that makes viewers curious and eager to wait until the video ends.
     3. Explains the concept in a fast-paced, highly engaging, and clear conversational style.
-    4. Has a short call to action at the end (e.g., "subscribe for more", "let me know in the comments").
+    4. MUST conclude with an engaging call-to-action asking viewers what topic they want to see next (e.g., "What topic do you want next? Let me know in the comments and subscribe!").
     5. Write the script as plain spoken English text without stage directions, sound effect indicators, or bracketed text like [music plays]. Only output the exact words the voiceover will speak.
     6. Provide exactly 10 tags in the "tags" array. Every tag must be a high-volume viral search tag (with 10M+ views or uses) relevant to the topic (e.g., shorts, trending, viral, science, tech, facts, and topic-specific highly searched keywords). Return them as plain strings without the '#' symbol.
     7. Provide a short, punchy 3 to 6 word visual hook banner in ALL CAPS with emojis for the "hook_text" field (e.g., "WAIT TILL THE END! 🤯", "DON'T SCROLL: CRAZY SECRET! 🚨", "THE TRUTH REVEALED 🤫").
@@ -190,6 +190,15 @@ def generate_ass_file(word_boundaries: list, ass_path: str, hook_text: str = "")
             # Dialogue: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             lines.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{cue_text}")
 
+    # Add top-center Outro Call-To-Action banner for the last 3.8 seconds
+    if groups:
+        total_end_time = groups[-1][-1]["end"]
+        if total_end_time > 6.0:
+            outro_start = max(4.5, total_end_time - 3.8)
+            outro_start_str = format_ass_time(outro_start)
+            outro_end_str = format_ass_time(total_end_time + 0.5)
+            lines.append(f"Dialogue: 1,{outro_start_str},{outro_end_str},HookBanner,,0,0,0,,{{\\fade(200,200)}}💬 WHAT TOPIC NEXT? COMMENT! 👇")
+
     # ASS Subtitle definition headers (Arial Black style, bold, sized 34, centered in the video + HookBanner at top-center)
     ASS_TEMPLATE = """[Script Info]
 ScriptType: v4.00+
@@ -323,7 +332,7 @@ def get_fallback_script(category: str) -> dict:
                 "hook_text": "WAIT TILL THE END! 💻⚡",
                 "description": "Quantum computers are not just normal computers but faster. Here is how they work and why they are going to change medicine, encryption, and the entire digital world forever! #quantumcomputing #tech #future #science",
                 "tags": ["shorts", "trending", "viral", "foryou", "tech", "quantumcomputing", "futuretech", "computers", "science", "innovation"],
-                "script": "The quantum computing revolution is closer than you think! Standard computers use bits, which are either zero or one. But quantum computers use qubits, which can be both at the same time! This means they can solve complex problems in seconds that would take our best supercomputers thousands of years. From breaking encryption to inventing new medicines, quantum computing is about to change everything. Are you ready for this future? Let me know in the comments!",
+                "script": "The quantum computing revolution is closer than you think! Standard computers use bits, which are either zero or one. But quantum computers use qubits, which can be both at the same time! This means they can solve complex problems in seconds that would take our best supercomputers thousands of years. From breaking encryption to inventing new medicines, quantum computing is about to change everything. What topic should I cover next? Let me know in the comments and subscribe!",
                 "search_keywords": ["quantum computer technology", "microchip close up", "glowing servers computing"]
             },
             {
@@ -331,7 +340,7 @@ def get_fallback_script(category: str) -> dict:
                 "hook_text": "DON'T SCROLL: MOON TECH! 🚀",
                 "description": "Compare the computing power of the NASA Apollo space program to the smartphone in your pocket. You won't believe how far technology has scaled! #space #techhistory #smartphone #nasa #funfacts",
                 "tags": ["shorts", "trending", "viral", "foryou", "nasa", "space", "smartphone", "techhistory", "engineering", "facts"],
-                "script": "Your smartphone has more computing power than all of NASA did when they sent astronauts to the Moon in 1969! That's right—the device in your pocket is millions of times faster. It shows how rapidly technology is scaling. If this pace continues, what will technology look like in another fifty years? Drop your thoughts below and subscribe for more mind-blowing tech facts!",
+                "script": "Your smartphone has more computing power than all of NASA did when they sent astronauts to the Moon in 1969! That's right—the device in your pocket is millions of times faster. It shows how rapidly technology is scaling. If this pace continues, what will technology look like in another fifty years? What topic do you want next? Let me know in the comments and subscribe!",
                 "search_keywords": ["retro space electronics", "rocket launch apollo", "modern smartphone typing"]
             }
         ],
@@ -341,7 +350,7 @@ def get_fallback_script(category: str) -> dict:
                 "hook_text": "THE 38-MINUTE WAR! ⏱️💥",
                 "description": "The Anglo-Zanzibar war of 1896 remains the shortest war ever recorded. Here is how it went down and why it was over before it even started! #historyfacts #funfacts #britishhistory #militaryhistory",
                 "tags": ["shorts", "trending", "viral", "foryou", "history", "historyfacts", "war", "britishhistory", "weirdhistory", "learn"],
-                "script": "Did you know that the shortest war in history lasted only thirty-eight minutes? It happened in 1896 between the British Empire and the Sultanate of Zanzibar. The Sultan died, a usurper took power, and the British fleet immediately opened fire on the palace. In less than forty minutes, the new Sultan's forces surrendered. Talk about a quick defeat! Subscribe for more historic facts!",
+                "script": "Did you know that the shortest war in history lasted only thirty-eight minutes? It happened in 1896 between the British Empire and the Sultanate of Zanzibar. The Sultan died, a usurper took power, and the British fleet immediately opened fire on the palace. In less than forty minutes, the new Sultan's forces surrendered. Talk about a quick defeat! What historical topic should I cover next? Let me know in the comments and subscribe!",
                 "search_keywords": ["old sailing warship cannon", "zanzibar palace ruins", "historic pocket watch 38 minutes"]
             },
             {
@@ -349,7 +358,7 @@ def get_fallback_script(category: str) -> dict:
                 "hook_text": "PYRAMID SECRET REVEALED! 🔺",
                 "description": "New evidence changes everything we knew about how the pyramids were built. Spoiler: it wasn't slaves! #pyramids #egypt #ancienthistory #secrets #historical",
                 "tags": ["shorts", "trending", "viral", "foryou", "egypt", "pyramids", "ancienthistory", "archaeology", "mysteries", "engineering"],
-                "script": "Did you know that the ancient Egyptians did not build the pyramids using slaves? Archaeological discoveries of workers' tombs show they were actually paid laborers. They were highly respected craftsmen who ate meat and drank beer daily. Building the pyramids was a matter of national pride, not slavery. Subscribe to discover more history secrets!",
+                "script": "Did you know that the ancient Egyptians did not build the pyramids using slaves? Archaeological discoveries of workers' tombs show they were actually paid laborers. They were highly respected craftsmen who ate meat and drank beer daily. Building the pyramids was a matter of national pride, not slavery. What mystery should I cover next? Let me know in the comments and subscribe!",
                 "search_keywords": ["ancient egyptian pyramids", "hieroglyphs wall carvings", "stone workers construction"]
             }
         ],
@@ -359,7 +368,7 @@ def get_fallback_script(category: str) -> dict:
                 "hook_text": "WHY THE SKY IS BLUE! 🌌",
                 "description": "Learn the actual physics behind why the sky appears blue. Hint: it is not the ocean reflection, but a physics process called Rayleigh scattering! #sciencefacts #whytheskyisblue #physics #howitworks",
                 "tags": ["shorts", "trending", "viral", "foryou", "science", "physics", "sky", "earth", "nature", "explain"],
-                "script": "Why is the sky blue? It's not because it reflects the ocean! It's actually due to a phenomenon called Rayleigh scattering. Sunlight contains all colors of the rainbow, but blue light travels in shorter, smaller waves. When it hits Earth's atmosphere, it scatters in all directions, coloring the sky. Subscribe to learn why the universe works the way it does!",
+                "script": "Why is the sky blue? It's not because it reflects the ocean! It's actually due to a phenomenon called Rayleigh scattering. Sunlight contains all colors of the rainbow, but blue light travels in shorter, smaller waves. When it hits Earth's atmosphere, it scatters in all directions, coloring the sky. What science question should I answer next? Let me know in the comments and subscribe!",
                 "search_keywords": ["beautiful blue sky clouds", "sunset prism light spectrum", "earth atmosphere space view"]
             },
             {
@@ -367,7 +376,7 @@ def get_fallback_script(category: str) -> dict:
                 "hook_text": "THE COFFEE BRAIN TRICK! ☕",
                 "description": "How does coffee actually keep you awake? It doesn't give you energy, it tricks your brain structure! #coffee #science #brain #caffeine #healthylifestyle",
                 "tags": ["shorts", "trending", "viral", "foryou", "coffee", "caffeine", "brain", "health", "science", "biology"],
-                "script": "Why does coffee actually make you feel awake? It doesn't actually give you energy! Instead, caffeine blockades adenosine, a chemical in your brain that signals tiredness. By binding to adenosine receptors, caffeine tricks your brain into thinking you are fully awake. That's why you crash when it wears off! Let me know your coffee routine in the comments!",
+                "script": "Why does coffee actually make you feel awake? It doesn't actually give you energy! Instead, caffeine blockades adenosine, a chemical in your brain that signals tiredness. By binding to adenosine receptors, caffeine tricks your brain into thinking you are fully awake. That's why you crash when it wears off! What topic do you want to learn about next? Let me know in the comments and subscribe!",
                 "search_keywords": ["coffee cup steaming", "brain synapse neural activity", "coffee beans roasting close up"]
             }
         ]
