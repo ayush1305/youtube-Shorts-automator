@@ -794,11 +794,12 @@ async def run_pipeline_task(task_id: str, category: str, prompt: str):
         
         sub_path_ffmpeg = to_posix_relative_path(local_ass_path)
         
-        # Mix voiceover with low-volume background music (volume 0.10: 10% volume so voice is crystal-clear)
+        # Mix voiceover with background music (boost voiceover to 1.25x with weights=1.0 0.10 so narration is 100% loud and crisp)
         filter_complex_final = (
             f"[0:v]subtitles={sub_path_ffmpeg}[v]; "
-            f"[2:a]volume=0.10[bgm]; "
-            f"[1:a][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+            f"[1:a]volume=1.25[voice]; "
+            f"[2:a]volume=0.08[music]; "
+            f"[voice][music]amix=inputs=2:weights=1.0 0.10:duration=first:dropout_transition=2[aout]"
         )
         
         ffmpeg_final = [
